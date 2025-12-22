@@ -1,0 +1,64 @@
+version: '3.8'
+
+# Production docker-compose override
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+
+services:
+  api:
+    # Don't expose database port in production
+    # Use internal network only
+    ports:
+      - "127.0.0.1:${SERVER_PORT:-8080}:8080"  # Only bind to localhost, use reverse proxy
+    
+    environment:
+      ENVIRONMENT: production
+      DB_SSLMODE: require  # Require SSL in production
+      # Remove default JWT secret - must be set via env
+      JWT_SECRET: ${JWT_SECRET}  # No default, must be provided
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  postgres:
+    # Don't expose database port in production
+    ports: []
+    
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD}  # Must be set, no default
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+    
+    # Backup volume
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups  # Mount backup directory
+    
+    # Logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+

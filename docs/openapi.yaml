@@ -1,0 +1,1423 @@
+openapi: 3.1.0
+info:
+  title: TransJakarta Routes API
+  description: |
+    A RESTful API application built with Go (Gin framework) to manage TransJakarta BRT route information, stops/terminals, vehicles, and user reports.
+    
+    ## Features
+    - User Authentication (Email/Password and OAuth)
+    - Role-Based Access Control (Common users and Admins)
+    - Route Management
+    - Stop/Terminal Management
+    - Vehicle Management
+    - Reporting System
+  version: 1.0.0
+  contact:
+    name: API Support
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+  - url: https://api.example.com
+    description: Production server
+
+tags:
+  - name: Authentication
+    description: User authentication endpoints
+  - name: Stops
+    description: Stop/Terminal management
+  - name: Routes
+    description: Route management
+  - name: Vehicles
+    description: Vehicle management
+  - name: Reports
+    description: User reports management
+  - name: Users
+    description: User management (Admin only)
+  - name: Health
+    description: Health check endpoint
+
+paths:
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check
+      description: Check if the API is running
+      operationId: healthCheck
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/v1/auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register new user
+      description: Register a new user with email and password
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+              example:
+                success: true
+                data:
+                  id: 1
+                  email: user@example.com
+                  username: johndoe
+                  role: common_user
+                  created_at: "2024-01-01T00:00:00Z"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Login with email/password
+      description: Authenticate user and receive JWT tokens
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/auth/oauth/{provider}:
+    get:
+      tags:
+        - Authentication
+      summary: Initiate OAuth flow
+      description: Redirect to OAuth provider (Google)
+      operationId: oauthInitiate
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google]
+      responses:
+        '302':
+          description: Redirect to OAuth provider
+
+  /api/v1/auth/oauth/{provider}/callback:
+    get:
+      tags:
+        - Authentication
+      summary: OAuth callback
+      description: Handle OAuth callback and authenticate user
+      operationId: oauthCallback
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [google]
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OAuth authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/stops:
+    get:
+      tags:
+        - Stops
+      summary: List all stops
+      description: Get paginated list of stops with optional filters
+      operationId: listStops
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [stop, terminal]
+        - name: city
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of stops
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StopListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Stops
+      summary: Create stop
+      description: Create a new stop (Admin only)
+      operationId: createStop
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Stop'
+      responses:
+        '201':
+          description: Stop created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/stops/{id}:
+    get:
+      tags:
+        - Stops
+      summary: Get stop by ID
+      description: Get detailed information about a specific stop
+      operationId: getStop
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Stop details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Stops
+      summary: Update stop
+      description: Update stop information (Admin only)
+      operationId: updateStop
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Stop'
+      responses:
+        '200':
+          description: Stop updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags:
+        - Stops
+      summary: Delete stop
+      description: Delete a stop (Admin only)
+      operationId: deleteStop
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Stop deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/routes:
+    get:
+      tags:
+        - Routes
+      summary: List all routes
+      description: Get paginated list of routes with optional filters
+      operationId: listRoutes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive]
+        - name: route_number
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of routes
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RouteListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Routes
+      summary: Create route
+      description: Create a new route with stops (Admin only)
+      operationId: createRoute
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateRouteRequest'
+      responses:
+        '201':
+          description: Route created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/routes/{id}:
+    get:
+      tags:
+        - Routes
+      summary: Get route by ID
+      description: Get detailed information about a specific route with stops
+      operationId: getRoute
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Route details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Routes
+      summary: Update route
+      description: Update route metadata (Admin only)
+      operationId: updateRoute
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Route'
+      responses:
+        '200':
+          description: Route updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags:
+        - Routes
+      summary: Delete route
+      description: Delete a route (Admin only)
+      operationId: deleteRoute
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Route deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/routes/{id}/stops:
+    put:
+      tags:
+        - Routes
+      summary: Update route stops
+      description: Update the stops for a route (Admin only)
+      operationId: updateRouteStops
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateRouteStopsRequest'
+      responses:
+        '200':
+          description: Route stops updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/vehicles:
+    get:
+      tags:
+        - Vehicles
+      summary: List all vehicles
+      description: Get paginated list of vehicles with optional filters
+      operationId: listVehicles
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive]
+        - name: route_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of vehicles
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VehicleListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Vehicles
+      summary: Create vehicle
+      description: Create a new vehicle (Admin only)
+      operationId: createVehicle
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Vehicle'
+      responses:
+        '201':
+          description: Vehicle created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/vehicles/{id}:
+    get:
+      tags:
+        - Vehicles
+      summary: Get vehicle by ID
+      description: Get detailed information about a specific vehicle
+      operationId: getVehicle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Vehicle details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags:
+        - Vehicles
+      summary: Update vehicle
+      description: Update vehicle information (Admin only)
+      operationId: updateVehicle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Vehicle'
+      responses:
+        '200':
+          description: Vehicle updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+    delete:
+      tags:
+        - Vehicles
+      summary: Delete vehicle
+      description: Delete a vehicle (Admin only)
+      operationId: deleteVehicle
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Vehicle deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/reports:
+    get:
+      tags:
+        - Reports
+      summary: List reports
+      description: Get paginated list of reports (users see only their own, admins see all)
+      operationId: listReports
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, reviewed, resolved]
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [route_issue, stop_issue, temporary_event, policy_change]
+      responses:
+        '200':
+          description: List of reports
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Reports
+      summary: Create report
+      description: Create a new report (Authenticated users)
+      operationId: createReport
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Report'
+      responses:
+        '201':
+          description: Report created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/reports/{id}:
+    get:
+      tags:
+        - Reports
+      summary: Get report by ID
+      description: Get detailed information about a specific report
+      operationId: getReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Report details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags:
+        - Reports
+      summary: Delete report
+      description: Delete a report (Admin only)
+      operationId: deleteReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Report deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/reports/{id}/status:
+    put:
+      tags:
+        - Reports
+      summary: Update report status
+      description: Update report status and admin notes (Admin only)
+      operationId: updateReportStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateReportStatusRequest'
+      responses:
+        '200':
+          description: Report status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/users:
+    get:
+      tags:
+        - Users
+      summary: List users
+      description: Get paginated list of users (Admin only)
+      operationId: listUsers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/users/{id}:
+    get:
+      tags:
+        - Users
+      summary: Get user by ID
+      description: Get detailed information about a specific user (Admin only)
+      operationId: getUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SuccessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/users/{id}/role:
+    put:
+      tags:
+        - Users
+      summary: Update user role
+      description: Update user role (Admin only)
+      operationId: updateUserRole
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateUserRoleRequest'
+      responses:
+        '200':
+          description: User role updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from login endpoint
+
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - username
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: johndoe
+        password:
+          type: string
+          format: password
+          minLength: 6
+          example: password123
+
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        password:
+          type: string
+          format: password
+          example: password123
+
+    LoginResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        access_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        refresh_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        email:
+          type: string
+          format: email
+          example: user@example.com
+        username:
+          type: string
+          example: johndoe
+        role:
+          type: string
+          enum: [common_user, admin]
+          example: common_user
+        oauth_provider:
+          type: string
+          nullable: true
+          example: google
+        oauth_id:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+
+    Stop:
+      type: object
+      required:
+        - name
+        - type
+        - latitude
+        - longitude
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Halte Bundaran HI
+        type:
+          type: string
+          enum: [stop, terminal]
+          example: stop
+        latitude:
+          type: number
+          format: double
+          example: -6.1944
+        longitude:
+          type: number
+          format: double
+          example: 106.8229
+        address:
+          type: string
+          example: Jl. Jend. Sudirman, Jakarta
+        city:
+          type: string
+          example: Jakarta Pusat
+        district:
+          type: string
+          example: Menteng
+        facilities:
+          type: string
+          nullable: true
+          example: '["shelter", "bench", "lighting"]'
+        status:
+          type: string
+          enum: [active, inactive]
+          default: active
+          example: active
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Route:
+      type: object
+      required:
+        - route_number
+        - name
+      properties:
+        id:
+          type: integer
+          example: 1
+        route_number:
+          type: string
+          example: "1"
+        name:
+          type: string
+          example: Blok M - Kota
+        description:
+          type: string
+          example: Route from Blok M to Kota
+        status:
+          type: string
+          enum: [active, inactive]
+          default: active
+          example: active
+        route_stops:
+          type: array
+          items:
+            $ref: '#/components/schemas/RouteStop'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RouteStop:
+      type: object
+      properties:
+        id:
+          type: integer
+        route_id:
+          type: integer
+        stop_id:
+          type: integer
+        sequence_order:
+          type: integer
+        stop:
+          $ref: '#/components/schemas/Stop'
+
+    CreateRouteRequest:
+      type: object
+      required:
+        - route_number
+        - name
+        - stop_ids
+      properties:
+        route_number:
+          type: string
+          example: "1"
+        name:
+          type: string
+          example: Blok M - Kota
+        description:
+          type: string
+          example: Route from Blok M to Kota
+        status:
+          type: string
+          enum: [active, inactive]
+          default: active
+        stop_ids:
+          type: array
+          items:
+            type: integer
+          minItems: 2
+          example: [1, 2, 3, 4]
+
+    UpdateRouteStopsRequest:
+      type: object
+      required:
+        - stop_ids
+      properties:
+        stop_ids:
+          type: array
+          items:
+            type: integer
+          minItems: 2
+          example: [1, 2, 3, 4, 5]
+
+    Vehicle:
+      type: object
+      required:
+        - vehicle_plate
+        - route_id
+      properties:
+        id:
+          type: integer
+          example: 1
+        vehicle_plate:
+          type: string
+          example: B1234XYZ
+        route_id:
+          type: integer
+          example: 1
+        vehicle_type:
+          type: string
+          example: Bus
+        capacity:
+          type: integer
+          example: 60
+        status:
+          type: string
+          enum: [active, inactive]
+          default: active
+          example: active
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Report:
+      type: object
+      required:
+        - type
+        - title
+        - description
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 1
+        type:
+          type: string
+          enum: [route_issue, stop_issue, temporary_event, policy_change]
+          example: route_issue
+        title:
+          type: string
+          example: Route 1 is delayed
+        description:
+          type: string
+          example: Route 1 has been experiencing delays during rush hour
+        related_route_id:
+          type: integer
+          nullable: true
+          example: 1
+        related_stop_id:
+          type: integer
+          nullable: true
+          example: 2
+        status:
+          type: string
+          enum: [pending, reviewed, resolved]
+          default: pending
+          example: pending
+        admin_notes:
+          type: string
+          nullable: true
+          example: Investigating the issue
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UpdateReportStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [pending, reviewed, resolved]
+          example: reviewed
+        admin_notes:
+          type: string
+          nullable: true
+          example: Issue has been resolved
+
+    UpdateUserRoleRequest:
+      type: object
+      required:
+        - role
+      properties:
+        role:
+          type: string
+          enum: [common_user, admin]
+          example: admin
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+
+    MessageResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: Operation completed successfully
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          example: Error message here
+
+    StopListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            stops:
+              type: array
+              items:
+                $ref: '#/components/schemas/Stop'
+            total:
+              type: integer
+              example: 100
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 10
+
+    RouteListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            routes:
+              type: array
+              items:
+                $ref: '#/components/schemas/Route'
+            total:
+              type: integer
+              example: 50
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 10
+
+    VehicleListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            vehicles:
+              type: array
+              items:
+                $ref: '#/components/schemas/Vehicle'
+            total:
+              type: integer
+              example: 200
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 10
+
+    ReportListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            reports:
+              type: array
+              items:
+                $ref: '#/components/schemas/Report'
+            total:
+              type: integer
+              example: 30
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 10
+
+    UserListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            users:
+              type: array
+              items:
+                $ref: '#/components/schemas/User'
+            total:
+              type: integer
+              example: 50
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 10
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "Invalid request parameters"
+
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "Unauthorized access"
+
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "Access forbidden"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "Resource not found"
+

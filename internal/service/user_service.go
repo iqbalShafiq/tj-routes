@@ -20,6 +20,7 @@ type UserService interface {
 	GetUserByEmail(email string) (*models.User, error)
 	ListUsers(offset, limit int) ([]models.User, int64, error)
 	UpdateUserRole(userID uint, role models.UserRole) error
+	GetSystemUser() (*models.User, error)
 }
 
 type userService struct {
@@ -183,5 +184,33 @@ func (s *userService) UpdateUserRole(userID uint, role models.UserRole) error {
 
 	user.Role = role
 	return s.userRepo.Update(user)
+}
+
+func (s *userService) GetSystemUser() (*models.User, error) {
+	const systemUserEmail = "system@tj-routes.local"
+
+	// Try to find existing system user
+	user, err := s.userRepo.FindByEmail(systemUserEmail)
+	if err == nil {
+		return user, nil
+	}
+
+	if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to find system user: %w", err)
+	}
+
+	// System user doesn't exist, create it
+	user = &models.User{
+		Email:    systemUserEmail,
+		Username: "system",
+		Role:     models.RoleCommonUser,
+		Password: nil, // No password for system user
+	}
+
+	if err := s.userRepo.Create(user); err != nil {
+		return nil, fmt.Errorf("failed to create system user: %w", err)
+	}
+
+	return user, nil
 }
 

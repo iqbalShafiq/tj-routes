@@ -13,6 +13,7 @@ import (
 
 type ReportHandler struct {
 	reportService service.ReportService
+	userService   service.UserService
 }
 
 type UpdateReportStatusRequest struct {
@@ -20,9 +21,10 @@ type UpdateReportStatusRequest struct {
 	AdminNotes *string `json:"admin_notes"`
 }
 
-func NewReportHandler(reportService service.ReportService) *ReportHandler {
+func NewReportHandler(reportService service.ReportService, userService service.UserService) *ReportHandler {
 	return &ReportHandler{
 		reportService: reportService,
+		userService:   userService,
 	}
 }
 
@@ -93,8 +95,20 @@ func (h *ReportHandler) CreateReport(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("user_id")
-	report.UserID = userID.(uint)
+	// Check if user is authenticated
+	userID, exists := c.Get("user_id")
+	if exists {
+		// Authenticated user - use their ID
+		report.UserID = userID.(uint)
+	} else {
+		// Guest user - use system user ID
+		systemUser, err := h.userService.GetSystemUser()
+		if err != nil {
+			InternalServerError(c, err)
+			return
+		}
+		report.UserID = systemUser.ID
+	}
 
 	if err := h.reportService.CreateReport(&report); err != nil {
 		BadRequest(c, err)

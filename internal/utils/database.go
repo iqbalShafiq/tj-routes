@@ -70,3 +70,37 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.RouteChange{},
 	)
 }
+
+// EnsureSystemUser ensures that a system user exists for guest reports
+// Returns the system user ID
+func EnsureSystemUser(db *gorm.DB) (uint, error) {
+	const systemUserEmail = "system@tj-routes.local"
+	const systemUsername = "system"
+
+	var systemUser models.User
+	err := db.Where("email = ?", systemUserEmail).First(&systemUser).Error
+	
+	if err == nil {
+		// System user already exists
+		return systemUser.ID, nil
+	}
+
+	if err != gorm.ErrRecordNotFound {
+		// Some other error occurred
+		return 0, err
+	}
+
+	// System user doesn't exist, create it
+	systemUser = models.User{
+		Email:    systemUserEmail,
+		Username: systemUsername,
+		Role:     models.RoleCommonUser,
+		Password: nil, // No password for system user
+	}
+
+	if err := db.Create(&systemUser).Error; err != nil {
+		return 0, err
+	}
+
+	return systemUser.ID, nil
+}

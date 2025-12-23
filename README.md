@@ -137,40 +137,48 @@ Once the server is running, you can access the interactive API documentation:
 - `GET /api/v1/auth/oauth/:provider` - Initiate OAuth (e.g., `/api/v1/auth/oauth/google`)
 - `GET /api/v1/auth/oauth/:provider/callback` - OAuth callback (e.g., `/api/v1/auth/oauth/google/callback`)
 
-**Note**: All endpoints below `/api/v1/auth` require authentication via JWT token in the `Authorization` header: `Bearer <token>`
+**Note**: Most endpoints below `/api/v1/auth` require authentication via JWT token in the `Authorization` header: `Bearer <token>`. However, some endpoints are available to guest users (non-authenticated) as indicated below.
+
+### Guest Access
+
+Guest users (non-authenticated) can access:
+- **Read-only endpoints**: Routes, Stops, and Vehicles (GET requests)
+- **Report creation**: Create reports (assigned to system user account)
+
+All write operations (POST, PUT, DELETE) require authentication, and admin operations require both authentication and admin role.
 
 ### Stops/Terminals
 
-- `GET /api/v1/stops` - List all stops (paginated)
-- `GET /api/v1/stops/:id` - Get stop details
-- `POST /api/v1/stops` - Create stop (admin only)
-- `PUT /api/v1/stops/:id` - Update stop (admin only)
-- `DELETE /api/v1/stops/:id` - Delete stop (admin only)
+- `GET /api/v1/stops` - List all stops (paginated) - **Guest accessible**
+- `GET /api/v1/stops/:id` - Get stop details - **Guest accessible**
+- `POST /api/v1/stops` - Create stop (admin only, requires authentication)
+- `PUT /api/v1/stops/:id` - Update stop (admin only, requires authentication)
+- `DELETE /api/v1/stops/:id` - Delete stop (admin only, requires authentication)
 
 ### Routes
 
-- `GET /api/v1/routes` - List all routes (paginated)
-- `GET /api/v1/routes/:id` - Get route details with stops
-- `POST /api/v1/routes` - Create route with stops (admin only)
-- `PUT /api/v1/routes/:id` - Update route metadata (admin only)
-- `PUT /api/v1/routes/:id/stops` - Update route stops (admin only)
-- `DELETE /api/v1/routes/:id` - Delete route (admin only)
+- `GET /api/v1/routes` - List all routes (paginated) - **Guest accessible**
+- `GET /api/v1/routes/:id` - Get route details with stops - **Guest accessible**
+- `POST /api/v1/routes` - Create route with stops (admin only, requires authentication)
+- `PUT /api/v1/routes/:id` - Update route metadata (admin only, requires authentication)
+- `PUT /api/v1/routes/:id/stops` - Update route stops (admin only, requires authentication)
+- `DELETE /api/v1/routes/:id` - Delete route (admin only, requires authentication)
 
 ### Vehicles
 
-- `GET /api/v1/vehicles` - List all vehicles (paginated)
-- `GET /api/v1/vehicles/:id` - Get vehicle details
-- `POST /api/v1/vehicles` - Create vehicle (admin only)
-- `PUT /api/v1/vehicles/:id` - Update vehicle (admin only)
-- `DELETE /api/v1/vehicles/:id` - Delete vehicle (admin only)
+- `GET /api/v1/vehicles` - List all vehicles (paginated) - **Guest accessible**
+- `GET /api/v1/vehicles/:id` - Get vehicle details - **Guest accessible**
+- `POST /api/v1/vehicles` - Create vehicle (admin only, requires authentication)
+- `PUT /api/v1/vehicles/:id` - Update vehicle (admin only, requires authentication)
+- `DELETE /api/v1/vehicles/:id` - Delete vehicle (admin only, requires authentication)
 
 ### Reports
 
-- `GET /api/v1/reports` - List reports (users see only their own)
-- `GET /api/v1/reports/:id` - Get report details
-- `POST /api/v1/reports` - Create report (authenticated users)
-- `PUT /api/v1/reports/:id/status` - Update report status (admin only)
-- `DELETE /api/v1/reports/:id` - Delete report (admin only)
+- `GET /api/v1/reports` - List reports (authenticated users see only their own, admins see all, requires authentication)
+- `GET /api/v1/reports/:id` - Get report details (authenticated users see own, admins see all, requires authentication)
+- `POST /api/v1/reports` - Create report - **Guest accessible** (guest reports are assigned to system user account)
+- `PUT /api/v1/reports/:id/status` - Update report status (admin only, requires authentication)
+- `DELETE /api/v1/reports/:id` - Delete report (admin only, requires authentication)
 
 ### Users (Admin only)
 

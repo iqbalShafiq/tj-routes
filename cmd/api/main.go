@@ -150,6 +150,13 @@ func main() {
 		logger.Info("Skipping database migrations (DB_RUN_MIGRATIONS=false)")
 	}
 
+	// Ensure system user exists for guest reports
+	systemUserID, err := utils.EnsureSystemUser(db)
+	if err != nil {
+		logger.Fatal("Failed to ensure system user exists", zap.Error(err))
+	}
+	logger.Info("System user ensured", zap.Uint("system_user_id", systemUserID))
+
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
 	stopRepo := repository.NewStopRepository(db)
@@ -171,7 +178,7 @@ func main() {
 	stopHandler := handler.NewStopHandler(stopService)
 	routeHandler := handler.NewRouteHandler(routeService)
 	vehicleHandler := handler.NewVehicleHandler(vehicleService)
-	reportHandler := handler.NewReportHandler(reportService)
+	reportHandler := handler.NewReportHandler(reportService, userService)
 	userHandler := handler.NewUserHandler(userService)
 	docsHandler := handler.NewDocsHandler()
 
@@ -293,47 +300,72 @@ func main() {
 			auth.GET("/oauth/:provider/callback", authHandler.OAuthCallback)
 		}
 
-		// Protected routes
-		protected := v1.Group("")
-		protected.Use(middleware.AuthMiddleware(cfg))
+		// Public routes (guest-accessible with optional auth)
+		public := v1.Group("")
+		public.Use(middleware.OptionalAuthMiddleware(cfg))
 		{
-			// Stops (read for all, write for admin)
-			stops := protected.Group("/stops")
+			// Stops (read for guests, write requires auth+admin)
+			stops := public.Group("/stops")
 			{
 				stops.GET("", stopHandler.ListStops)
 				stops.GET("/:id", stopHandler.GetStop)
+			}
+
+			// Routes (read for guests, write requires auth+admin)
+			routes := public.Group("/routes")
+			{
+				routes.GET("", routeHandler.ListRoutes)
+				routes.GET("/:id", routeHandler.GetRoute)
+			}
+
+			// Vehicles (read for guests, write requires auth+admin)
+			vehicles := public.Group("/vehicles")
+			{
+				vehicles.GET("", vehicleHandler.ListVehicles)
+				vehicles.GET("/:id", vehicleHandler.GetVehicle)
+			}
+
+			// Reports (create for guests and authenticated users)
+			reports := public.Group("/reports")
+			{
+				reports.POST("", reportHandler.CreateReport)
+			}
+		}
+
+		// Protected routes (require authentication)
+		protected := v1.Group("")
+		protected.Use(middleware.AuthMiddleware(cfg))
+		{
+			// Stops (write operations require admin)
+			stops := protected.Group("/stops")
+			{
 				stops.POST("", middleware.RequireAdmin(), stopHandler.CreateStop)
 				stops.PUT("/:id", middleware.RequireAdmin(), stopHandler.UpdateStop)
 				stops.DELETE("/:id", middleware.RequireAdmin(), stopHandler.DeleteStop)
 			}
 
-			// Routes (read for all, write for admin)
+			// Routes (write operations require admin)
 			routes := protected.Group("/routes")
 			{
-				routes.GET("", routeHandler.ListRoutes)
-				routes.GET("/:id", routeHandler.GetRoute)
 				routes.POST("", middleware.RequireAdmin(), routeHandler.CreateRoute)
 				routes.PUT("/:id", middleware.RequireAdmin(), routeHandler.UpdateRoute)
 				routes.PUT("/:id/stops", middleware.RequireAdmin(), routeHandler.UpdateRouteStops)
 				routes.DELETE("/:id", middleware.RequireAdmin(), routeHandler.DeleteRoute)
 			}
 
-			// Vehicles (read for all, write for admin)
+			// Vehicles (write operations require admin)
 			vehicles := protected.Group("/vehicles")
 			{
-				vehicles.GET("", vehicleHandler.ListVehicles)
-				vehicles.GET("/:id", vehicleHandler.GetVehicle)
 				vehicles.POST("", middleware.RequireAdmin(), vehicleHandler.CreateVehicle)
 				vehicles.PUT("/:id", middleware.RequireAdmin(), vehicleHandler.UpdateVehicle)
 				vehicles.DELETE("/:id", middleware.RequireAdmin(), vehicleHandler.DeleteVehicle)
 			}
 
-			// Reports (create for all, read/update/delete for admin and own reports)
+			// Reports (read/update/delete for authenticated users and admins)
 			reports := protected.Group("/reports")
 			{
 				reports.GET("", reportHandler.ListReports)
 				reports.GET("/:id", reportHandler.GetReport)
-				reports.POST("", reportHandler.CreateReport)
 				reports.PUT("/:id/status", middleware.RequireAdmin(), reportHandler.UpdateReportStatus)
 				reports.DELETE("/:id", middleware.RequireAdmin(), reportHandler.DeleteReport)
 			}

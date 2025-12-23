@@ -6,6 +6,7 @@ info:
     
     ## Features
     - User Authentication (Email/Password and OAuth)
+    - Guest Access (read-only routes, stops, vehicles; create reports)
     - Role-Based Access Control (Common users and Admins)
     - Route Management
     - Stop/Terminal Management
@@ -165,10 +166,8 @@ paths:
       tags:
         - Stops
       summary: List all stops
-      description: Get paginated list of stops with optional filters
+      description: Get paginated list of stops with optional filters. **Guest accessible** (authentication optional)
       operationId: listStops
-      security:
-        - bearerAuth: []
       parameters:
         - name: page
           in: query
@@ -201,8 +200,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/StopListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
     post:
       tags:
         - Stops
@@ -236,10 +233,8 @@ paths:
       tags:
         - Stops
       summary: Get stop by ID
-      description: Get detailed information about a specific stop
+      description: Get detailed information about a specific stop. **Guest accessible** (authentication optional)
       operationId: getStop
-      security:
-        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -253,8 +248,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
     put:
@@ -321,10 +314,8 @@ paths:
       tags:
         - Routes
       summary: List all routes
-      description: Get paginated list of routes with optional filters
+      description: Get paginated list of routes with optional filters. **Guest accessible** (authentication optional)
       operationId: listRoutes
-      security:
-        - bearerAuth: []
       parameters:
         - name: page
           in: query
@@ -352,8 +343,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RouteListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
     post:
       tags:
         - Routes
@@ -387,10 +376,8 @@ paths:
       tags:
         - Routes
       summary: Get route by ID
-      description: Get detailed information about a specific route with stops
+      description: Get detailed information about a specific route with stops. **Guest accessible** (authentication optional)
       operationId: getRoute
-      security:
-        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -404,8 +391,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
     put:
@@ -507,10 +492,8 @@ paths:
       tags:
         - Vehicles
       summary: List all vehicles
-      description: Get paginated list of vehicles with optional filters
+      description: Get paginated list of vehicles with optional filters. **Guest accessible** (authentication optional)
       operationId: listVehicles
-      security:
-        - bearerAuth: []
       parameters:
         - name: page
           in: query
@@ -573,10 +556,8 @@ paths:
       tags:
         - Vehicles
       summary: Get vehicle by ID
-      description: Get detailed information about a specific vehicle
+      description: Get detailed information about a specific vehicle. **Guest accessible** (authentication optional)
       operationId: getVehicle
-      security:
-        - bearerAuth: []
       parameters:
         - name: id
           in: path
@@ -590,8 +571,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/SuccessResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
     put:
@@ -696,10 +675,8 @@ paths:
       tags:
         - Reports
       summary: Create report
-      description: Create a new report (Authenticated users)
+      description: Create a new report. **Guest accessible** (authentication optional, guest reports are assigned to system user account). Authenticated users' reports are assigned to their own account.
       operationId: createReport
-      security:
-        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -715,8 +692,6 @@ paths:
                 $ref: '#/components/schemas/SuccessResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
 
   /api/v1/reports/{id}:
     get:

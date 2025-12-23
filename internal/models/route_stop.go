@@ -14,8 +14,7 @@ type RouteStop struct {
 	CreatedAt      time.Time `json:"created_at"`
 
 	// Relationships
-	Route Route `gorm:"foreignKey:RouteID" json:"route,omitempty"`
-	Stop  Stop  `gorm:"foreignKey:StopID" json:"stop,omitempty"`
+	Stop Stop `gorm:"foreignKey:StopID" json:"stop,omitempty"`
 }
 
 // Ensure unique combination of route and sequence order

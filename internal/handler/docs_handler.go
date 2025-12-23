@@ -45,18 +45,59 @@ func (h *DocsHandler) ServeScalarUI(c *gin.Context) {
   </style>
 </head>
 <body>
-  <script
-    id="api-reference"
-    type="application/json"
-    data-configuration='{
-      "theme": "default",
-      "layout": "modern",
-      "spec": {
-        "url": "/api/docs/openapi.yaml"
-      }
-    }'
-  ></script>
+  <script id="api-reference" data-url="/api/docs/openapi.yaml"></script>
   <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference@latest/dist/browser/standalone.js"></script>
+</body>
+</html>`
+	
+	c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(html))
+}
+
+// ServeSwaggerUI serves the Swagger UI documentation page (alternative to Scalar)
+func (h *DocsHandler) ServeSwaggerUI(c *gin.Context) {
+	html := `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TransJakarta Routes API - Swagger UI</title>
+  <link rel="stylesheet" type="text/css" href="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui.css" />
+  <style>
+    html {
+      box-sizing: border-box;
+      overflow: -moz-scrollbars-vertical;
+      overflow-y: scroll;
+    }
+    *, *:before, *:after {
+      box-sizing: inherit;
+    }
+    body {
+      margin:0;
+      background: #fafafa;
+    }
+  </style>
+</head>
+<body>
+  <div id="swagger-ui"></div>
+  <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
+  <script src="https://unpkg.com/swagger-ui-dist@5.9.0/swagger-ui-standalone-preset.js"></script>
+  <script>
+    window.onload = function() {
+      const ui = SwaggerUIBundle({
+        url: '/api/docs/openapi.yaml',
+        dom_id: '#swagger-ui',
+        deepLinking: true,
+        presets: [
+          SwaggerUIBundle.presets.apis,
+          SwaggerUIStandalonePreset
+        ],
+        plugins: [
+          SwaggerUIBundle.plugins.DownloadUrl
+        ],
+        layout: "StandaloneLayout"
+      });
+    };
+  </script>
 </body>
 </html>`
 	

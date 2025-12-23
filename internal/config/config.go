@@ -8,13 +8,14 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	JWT      JWTConfig
-	OAuth    OAuthConfig
-	Logging  LoggingConfig
-	Redis    RedisConfig
-	Cache    CacheConfig
+	Server      ServerConfig
+	Database    DatabaseConfig
+	JWT         JWTConfig
+	OAuth       OAuthConfig
+	Logging     LoggingConfig
+	Redis       RedisConfig
+	Cache       CacheConfig
+	FileStorage FileStorageConfig
 }
 
 type ServerConfig struct {
@@ -85,6 +86,21 @@ type CacheConfig struct {
 	SystemUserTTL     int // TTL in minutes
 }
 
+type FileStorageConfig struct {
+	StorageType      string   // "local" or "cloud" (default: "local")
+	UploadPath       string   // Base directory for local uploads (default: "./uploads")
+	MaxPhotoSize     int64    // Max size for photos in bytes (default: 5MB)
+	MaxPDFSize       int64    // Max size for PDFs in bytes (default: 10MB)
+	AllowedPhotoMIMEs []string // Allowed MIME types for photos
+	AllowedPDFMIMEs  []string // Allowed MIME types for PDFs
+	// Cloud storage config (optional, only if StorageType is "cloud")
+	CloudProvider    string   // "s3", "gcs", "azure" (optional)
+	CloudBucket      string   // Cloud storage bucket name (optional)
+	CloudRegion      string   // Cloud storage region (optional)
+	CloudAccessKey   string   // Cloud storage access key (optional)
+	CloudSecretKey   string   // Cloud storage secret key (optional)
+}
+
 func Load() (*Config, error) {
 	config := &Config{
 		Server: ServerConfig{
@@ -134,6 +150,19 @@ func Load() (*Config, error) {
 			StopTTL:       getEnvAsInt("CACHE_STOP_TTL", 60),       // 1 hour
 			VehicleTTL:    getEnvAsInt("CACHE_VEHICLE_TTL", 15),    // 15 minutes
 			SystemUserTTL: getEnvAsInt("CACHE_SYSTEM_USER_TTL", 1440), // 24 hours
+		},
+		FileStorage: FileStorageConfig{
+			StorageType:      getEnv("FILE_STORAGE_TYPE", "local"),
+			UploadPath:        getEnv("FILE_UPLOAD_PATH", "./uploads"),
+			MaxPhotoSize:     int64(getEnvAsInt("FILE_MAX_PHOTO_SIZE_MB", 5)) * 1024 * 1024, // Convert MB to bytes
+			MaxPDFSize:       int64(getEnvAsInt("FILE_MAX_PDF_SIZE_MB", 10)) * 1024 * 1024,  // Convert MB to bytes
+			AllowedPhotoMIMEs: []string{"image/jpeg", "image/png", "image/webp", "image/gif"},
+			AllowedPDFMIMEs:   []string{"application/pdf"},
+			CloudProvider:    getEnv("FILE_CLOUD_PROVIDER", ""),
+			CloudBucket:      getEnv("FILE_CLOUD_BUCKET", ""),
+			CloudRegion:      getEnv("FILE_CLOUD_REGION", ""),
+			CloudAccessKey:   getEnv("FILE_CLOUD_ACCESS_KEY", ""),
+			CloudSecretKey:   getEnv("FILE_CLOUD_SECRET_KEY", ""),
 		},
 	}
 

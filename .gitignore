@@ -45,3 +45,6 @@ bin/
 coverage.html
 coverage.out
 
+# Uploads
+uploads/
+

@@ -3,7 +3,7 @@ info:
   title: TransJakarta Routes API
   description: |
     A RESTful API application built with Go (Gin framework) to manage TransJakarta BRT route information, stops/terminals, vehicles, and user reports.
-    
+
     ## Features
     - User Authentication (Email/Password and OAuth)
     - Guest Access (read-only routes, stops, vehicles; create reports)
@@ -49,7 +49,7 @@ paths:
       description: Check if the API is running
       operationId: healthCheck
       responses:
-        '200':
+        "200":
           description: API is healthy
           content:
             application/json:
@@ -72,14 +72,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterRequest'
+              $ref: "#/components/schemas/RegisterRequest"
       responses:
-        '201':
+        "201":
           description: User created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
+                $ref: "#/components/schemas/SuccessResponse"
               example:
                 success: true
                 data:
@@ -88,8 +88,8 @@ paths:
                   username: johndoe
                   role: common_user
                   created_at: "2024-01-01T00:00:00Z"
-        '400':
-          $ref: '#/components/responses/BadRequest'
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   /api/v1/auth/login:
     post:
@@ -103,16 +103,16 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LoginRequest'
+              $ref: "#/components/schemas/LoginRequest"
       responses:
-        '200':
+        "200":
           description: Login successful
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoginResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                $ref: "#/components/schemas/LoginResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /api/v1/auth/oauth/{provider}:
     get:
@@ -129,7 +129,7 @@ paths:
             type: string
             enum: [google]
       responses:
-        '302':
+        "302":
           description: Redirect to OAuth provider
 
   /api/v1/auth/oauth/{provider}/callback:
@@ -152,14 +152,14 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: OAuth authentication successful
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/LoginResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                $ref: "#/components/schemas/LoginResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   /api/v1/stops:
     get:
@@ -194,39 +194,51 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: List of stops
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/StopListResponse'
+                $ref: "#/components/schemas/StopListResponse"
     post:
       tags:
         - Stops
       summary: Create stop
-      description: Create a new stop (Admin only)
+      description: Create a new stop (Admin only). Supports both JSON-only and multipart/form-data with photo upload.
       operationId: createStop
       security:
         - bearerAuth: []
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Stop'
+              type: object
+              properties:
+                data:
+                  type: string
+                  description: JSON string of stop data
+                  example: '{"name":"Halte Bundaran HI","type":"stop","latitude":-6.1944,"longitude":106.8229}'
+                photo:
+                  type: string
+                  format: binary
+                  description: "Photo file (optional). Allowed types: image/jpeg, image/png, image/webp, image/gif. Max size: 5MB"
+            example:
+              data: '{"name":"Halte Bundaran HI","type":"stop","latitude":-6.1944,"longitude":106.8229}'
+              photo: ""
       responses:
-        '201':
+        "201":
           description: Stop created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /api/v1/stops/{id}:
     get:
@@ -242,19 +254,19 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Stop details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
     put:
       tags:
         - Stops
       summary: Update stop
-      description: Update stop information (Admin only)
+      description: Update stop information (Admin only). Supports both JSON-only and multipart/form-data with photo upload.
       operationId: updateStop
       security:
         - bearerAuth: []
@@ -267,22 +279,34 @@ paths:
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Stop'
+              type: object
+              properties:
+                data:
+                  type: string
+                  description: JSON string of stop data
+                  example: '{"name":"Halte Bundaran HI Updated","type":"stop","latitude":-6.1944,"longitude":106.8229}'
+                photo:
+                  type: string
+                  format: binary
+                  description: "Photo file (optional). Allowed types: image/jpeg, image/png, image/webp, image/gif. Max size: 5MB"
+            example:
+              data: '{"name":"Halte Bundaran HI Updated","type":"stop","latitude":-6.1944,"longitude":106.8229}'
+              photo: ""
       responses:
-        '200':
+        "200":
           description: Stop updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
     delete:
       tags:
         - Stops
@@ -298,16 +322,16 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Stop deleted successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /api/v1/routes:
     get:
@@ -337,12 +361,12 @@ paths:
           schema:
             type: string
       responses:
-        '200':
+        "200":
           description: List of routes
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/RouteListResponse'
+                $ref: "#/components/schemas/RouteListResponse"
     post:
       tags:
         - Routes
@@ -356,20 +380,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CreateRouteRequest'
+              $ref: "#/components/schemas/CreateRouteRequest"
       responses:
-        '201':
+        "201":
           description: Route created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /api/v1/routes/{id}:
     get:
@@ -385,14 +409,14 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Route details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
     put:
       tags:
         - Routes
@@ -412,20 +436,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Route'
+              $ref: "#/components/schemas/Route"
       responses:
-        '200':
+        "200":
           description: Route updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
     delete:
       tags:
         - Routes
@@ -441,16 +465,16 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Route deleted successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /api/v1/routes/{id}/stops:
     put:
@@ -472,20 +496,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateRouteStopsRequest'
+              $ref: "#/components/schemas/UpdateRouteStopsRequest"
       responses:
-        '200':
+        "200":
           description: Route stops updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /api/v1/vehicles:
     get:
@@ -515,41 +539,50 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: List of vehicles
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/VehicleListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                $ref: "#/components/schemas/VehicleListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
     post:
       tags:
         - Vehicles
       summary: Create vehicle
-      description: Create a new vehicle (Admin only)
+      description: Create a new vehicle (Admin only). Supports both JSON-only and multipart/form-data with photo upload.
       operationId: createVehicle
       security:
         - bearerAuth: []
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Vehicle'
+              type: object
+              properties:
+                data:
+                  type: string
+                  description: JSON string of vehicle data
+                  example: '{"vehicle_plate":"B1234XYZ","route_id":1,"vehicle_type":"Bus","capacity":60}'
+                photo:
+                  type: string
+                  format: binary
+                  description: "Photo file (optional). Allowed types: image/jpeg, image/png, image/webp, image/gif. Max size: 5MB"
       responses:
-        '201':
+        "201":
           description: Vehicle created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /api/v1/vehicles/{id}:
     get:
@@ -565,19 +598,19 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Vehicle details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
     put:
       tags:
         - Vehicles
       summary: Update vehicle
-      description: Update vehicle information (Admin only)
+      description: Update vehicle information (Admin only). Supports both JSON-only and multipart/form-data with photo upload.
       operationId: updateVehicle
       security:
         - bearerAuth: []
@@ -590,22 +623,37 @@ paths:
       requestBody:
         required: true
         content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: string
+                  description: JSON string of vehicle data
+                  example: '{"vehicle_plate":"B1234XYZ","route_id":1,"vehicle_type":"Bus","capacity":60}'
+                photo:
+                  type: string
+                  format: binary
+                  description: "Photo file (optional). Allowed types: image/jpeg, image/png, image/webp, image/gif. Max size: 5MB"
+            example:
+              data: '{"vehicle_plate":"B1234XYZ","route_id":1,"vehicle_type":"Bus","capacity":60}'
+              photo: ""
           application/json:
             schema:
-              $ref: '#/components/schemas/Vehicle'
+              $ref: "#/components/schemas/Vehicle"
       responses:
-        '200':
+        "200":
           description: Vehicle updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
     delete:
       tags:
         - Vehicles
@@ -621,16 +669,16 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Vehicle deleted successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /api/v1/reports:
     get:
@@ -663,35 +711,52 @@ paths:
             type: string
             enum: [route_issue, stop_issue, temporary_event, policy_change]
       responses:
-        '200':
+        "200":
           description: List of reports
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ReportListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                $ref: "#/components/schemas/ReportListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
     post:
       tags:
         - Reports
       summary: Create report
-      description: Create a new report. **Guest accessible** (authentication optional, guest reports are assigned to system user account). Authenticated users' reports are assigned to their own account.
+      description: Create a new report. **Guest accessible** (authentication optional, guest reports are assigned to system user account). Authenticated users' reports are assigned to their own account. Supports both JSON-only and multipart/form-data with photo and PDF uploads.
       operationId: createReport
       requestBody:
         required: true
         content:
-          application/json:
+          multipart/form-data:
             schema:
-              $ref: '#/components/schemas/Report'
+              type: object
+              properties:
+                data:
+                  type: string
+                  description: JSON string of report data
+                  example: '{"type":"route_issue","title":"Route 1 is delayed","description":"Route 1 has been experiencing delays"}'
+                photos:
+                  type: string
+                  format: binary
+                  description: "Photo files (optional, multiple files can be uploaded by using the same field name multiple times). Allowed types: image/jpeg, image/png, image/webp, image/gif. Max size: 5MB per file"
+                pdfs:
+                  type: string
+                  format: binary
+                  description: "PDF files (optional, multiple files can be uploaded by using the same field name multiple times). Allowed type: application/pdf. Max size: 10MB per file"
+            example:
+              data: '{"type":"route_issue","title":"Route 1 is delayed","description":"Route 1 has been experiencing delays"}'
+              photos: ""
+              pdfs: ""
       responses:
-        '201':
+        "201":
           description: Report created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   /api/v1/reports/{id}:
     get:
@@ -709,18 +774,18 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Report details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
     delete:
       tags:
         - Reports
@@ -736,16 +801,16 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: Report deleted successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /api/v1/reports/{id}/status:
     put:
@@ -767,20 +832,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateReportStatusRequest'
+              $ref: "#/components/schemas/UpdateReportStatusRequest"
       responses:
-        '200':
+        "200":
           description: Report status updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /api/v1/users:
     get:
@@ -803,16 +868,16 @@ paths:
             type: integer
             default: 10
       responses:
-        '200':
+        "200":
           description: List of users
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserListResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/UserListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /api/v1/users/{id}:
     get:
@@ -830,18 +895,18 @@ paths:
           schema:
             type: integer
       responses:
-        '200':
+        "200":
           description: User details
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/SuccessResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /api/v1/users/{id}/role:
     put:
@@ -863,20 +928,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateUserRoleRequest'
+              $ref: "#/components/schemas/UpdateUserRoleRequest"
       responses:
-        '200':
+        "200":
           description: User role updated successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/MessageResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
 components:
   securitySchemes:
@@ -928,7 +993,7 @@ components:
       type: object
       properties:
         user:
-          $ref: '#/components/schemas/User'
+          $ref: "#/components/schemas/User"
         access_token:
           type: string
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
@@ -1013,6 +1078,11 @@ components:
           enum: [active, inactive]
           default: active
           example: active
+        photo_url:
+          type: string
+          nullable: true
+          description: URL of the stop photo
+          example: "http://localhost:8080/uploads/stops/1/photo_1234567890.jpg"
         created_at:
           type: string
           format: date-time
@@ -1046,7 +1116,7 @@ components:
         route_stops:
           type: array
           items:
-            $ref: '#/components/schemas/RouteStop'
+            $ref: "#/components/schemas/RouteStop"
         created_at:
           type: string
           format: date-time
@@ -1066,7 +1136,7 @@ components:
         sequence_order:
           type: integer
         stop:
-          $ref: '#/components/schemas/Stop'
+          $ref: "#/components/schemas/Stop"
 
     CreateRouteRequest:
       type: object
@@ -1133,6 +1203,11 @@ components:
           enum: [active, inactive]
           default: active
           example: active
+        photo_url:
+          type: string
+          nullable: true
+          description: URL of the vehicle photo
+          example: "http://localhost:8080/uploads/vehicles/1/photo_1234567890.jpg"
         created_at:
           type: string
           format: date-time
@@ -1180,6 +1255,22 @@ components:
           type: string
           nullable: true
           example: Investigating the issue
+        photo_urls:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: Array of photo URLs
+          example:
+            ["http://localhost:8080/uploads/reports/1/photo_1234567890.jpg"]
+        pdf_urls:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: Array of PDF document URLs
+          example:
+            ["http://localhost:8080/uploads/reports/1/document_1234567890.pdf"]
         created_at:
           type: string
           format: date-time
@@ -1252,7 +1343,7 @@ components:
             stops:
               type: array
               items:
-                $ref: '#/components/schemas/Stop'
+                $ref: "#/components/schemas/Stop"
             total:
               type: integer
               example: 100
@@ -1275,7 +1366,7 @@ components:
             routes:
               type: array
               items:
-                $ref: '#/components/schemas/Route'
+                $ref: "#/components/schemas/Route"
             total:
               type: integer
               example: 50
@@ -1298,7 +1389,7 @@ components:
             vehicles:
               type: array
               items:
-                $ref: '#/components/schemas/Vehicle'
+                $ref: "#/components/schemas/Vehicle"
             total:
               type: integer
               example: 200
@@ -1321,7 +1412,7 @@ components:
             reports:
               type: array
               items:
-                $ref: '#/components/schemas/Report'
+                $ref: "#/components/schemas/Report"
             total:
               type: integer
               example: 30
@@ -1344,7 +1435,7 @@ components:
             users:
               type: array
               items:
-                $ref: '#/components/schemas/User'
+                $ref: "#/components/schemas/User"
             total:
               type: integer
               example: 50
@@ -1361,7 +1452,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
           example:
             success: false
             error: "Invalid request parameters"
@@ -1371,7 +1462,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
           example:
             success: false
             error: "Unauthorized access"
@@ -1381,7 +1472,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
           example:
             success: false
             error: "Access forbidden"
@@ -1391,8 +1482,7 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
           example:
             success: false
             error: "Resource not found"
-

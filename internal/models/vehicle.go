@@ -13,6 +13,7 @@ type Vehicle struct {
 	VehicleType  string       `json:"vehicle_type"`
 	Capacity     int          `json:"capacity"`
 	Status       Status       `gorm:"type:varchar(20);default:'active'" json:"status"`
+	PhotoURL     *string      `json:"photo_url,omitempty"`
 	CreatedAt    time.Time    `json:"created_at"`
 	UpdatedAt    time.Time    `json:"updated_at"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`

@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -179,12 +180,24 @@ func main() {
 	vehicleService := service.NewVehicleService(vehicleRepo, routeRepo, cacheInstance, cfg)
 	reportService := service.NewReportService(reportRepo, routeRepo, stopRepo)
 
+	// Initialize file storage
+	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.Host, cfg.Server.Port)
+	if cfg.Server.Environment == "production" {
+		// In production, use actual domain from config if available
+		if allowedOrigin := cfg.Server.AllowedOrigin; allowedOrigin != "*" && allowedOrigin != "" {
+			// Extract protocol and domain from allowed origin
+			baseURL = allowedOrigin
+		}
+	}
+	fileStorage := utils.NewFileStorage(&cfg.FileStorage, baseURL)
+	logger.Info("File storage initialized", zap.String("type", cfg.FileStorage.StorageType), zap.String("path", cfg.FileStorage.UploadPath))
+
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(userService, cfg)
-	stopHandler := handler.NewStopHandler(stopService)
+	stopHandler := handler.NewStopHandler(stopService, fileStorage)
 	routeHandler := handler.NewRouteHandler(routeService)
-	vehicleHandler := handler.NewVehicleHandler(vehicleService)
-	reportHandler := handler.NewReportHandler(reportService, userService)
+	vehicleHandler := handler.NewVehicleHandler(vehicleService, fileStorage)
+	reportHandler := handler.NewReportHandler(reportService, userService, fileStorage, reportRepo)
 	userHandler := handler.NewUserHandler(userService)
 	docsHandler := handler.NewDocsHandler()
 
@@ -222,6 +235,9 @@ func main() {
 
 	// Rate limiting middleware
 	router.Use(middleware.RateLimitMiddleware(100, 200)) // 100 req/s, burst 200
+
+	// Serve uploaded files
+	router.Static("/uploads", cfg.FileStorage.UploadPath)
 
 	// Health check with database
 	router.GET("/health", func(c *gin.Context) {
@@ -291,6 +307,7 @@ func main() {
 	docs := router.Group("/api/docs")
 	{
 		docs.GET("", docsHandler.ServeScalarUI)
+		docs.GET("/swagger", docsHandler.ServeSwaggerUI) // Alternative Swagger UI
 		docs.GET("/openapi.yaml", docsHandler.ServeOpenAPISpec)
 	}
 

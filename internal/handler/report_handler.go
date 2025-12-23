@@ -1,12 +1,16 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
+	"mime/multipart"
 	"net/http"
 	"strconv"
 
 	"tj-routes/internal/models"
+	"tj-routes/internal/repository"
 	"tj-routes/internal/service"
+	"tj-routes/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,6 +18,8 @@ import (
 type ReportHandler struct {
 	reportService service.ReportService
 	userService   service.UserService
+	fileStorage   utils.FileStorage
+	reportRepo    repository.ReportRepository
 }
 
 type UpdateReportStatusRequest struct {
@@ -21,10 +27,12 @@ type UpdateReportStatusRequest struct {
 	AdminNotes *string `json:"admin_notes"`
 }
 
-func NewReportHandler(reportService service.ReportService, userService service.UserService) *ReportHandler {
+func NewReportHandler(reportService service.ReportService, userService service.UserService, fileStorage utils.FileStorage, reportRepo repository.ReportRepository) *ReportHandler {
 	return &ReportHandler{
 		reportService: reportService,
 		userService:   userService,
+		fileStorage:   fileStorage,
+		reportRepo:    reportRepo,
 	}
 }
 
@@ -90,9 +98,58 @@ func (h *ReportHandler) GetReport(c *gin.Context) {
 
 func (h *ReportHandler) CreateReport(c *gin.Context) {
 	var report models.Report
-	if err := c.ShouldBindJSON(&report); err != nil {
-		BadRequest(c, err)
-		return
+	var photoFiles []*multipart.FileHeader
+	var pdfFiles []*multipart.FileHeader
+
+	// Check if request is multipart/form-data
+	contentType := c.GetHeader("Content-Type")
+	if contentType == "multipart/form-data" || len(contentType) > 19 && contentType[:19] == "multipart/form-data" {
+		// Handle multipart/form-data
+		// Extract JSON data from form field "data"
+		dataStr := c.PostForm("data")
+		if dataStr != "" {
+			if err := json.Unmarshal([]byte(dataStr), &report); err != nil {
+				BadRequest(c, err)
+				return
+			}
+		} else {
+			// If no "data" field, try to bind directly (fallback)
+			if err := c.ShouldBind(&report); err != nil {
+				BadRequest(c, err)
+				return
+			}
+		}
+
+		// Get multiple photo files
+		form, err := c.MultipartForm()
+		if err == nil && form != nil {
+			// Check for photos (standard multipart) or photos[] (convention)
+			if files := form.File["photos"]; len(files) > 0 {
+				photoFiles = files
+			} else if files := form.File["photos[]"]; len(files) > 0 {
+				photoFiles = files
+			} else if file := form.File["photo"]; len(file) > 0 {
+				// Support single photo as well
+				photoFiles = file
+			}
+
+			// Get multiple PDF files
+			// Check for pdfs (standard multipart) or pdfs[] (convention)
+			if files := form.File["pdfs"]; len(files) > 0 {
+				pdfFiles = files
+			} else if files := form.File["pdfs[]"]; len(files) > 0 {
+				pdfFiles = files
+			} else if file := form.File["pdf"]; len(file) > 0 {
+				// Support single PDF as well
+				pdfFiles = file
+			}
+		}
+	} else {
+		// Handle JSON-only request
+		if err := c.ShouldBindJSON(&report); err != nil {
+			BadRequest(c, err)
+			return
+		}
 	}
 
 	// Check if user is authenticated
@@ -110,9 +167,54 @@ func (h *ReportHandler) CreateReport(c *gin.Context) {
 		report.UserID = systemUser.ID
 	}
 
+	// Create report first to get ID (we'll update with file URLs after)
 	if err := h.reportService.CreateReport(&report); err != nil {
 		BadRequest(c, err)
 		return
+	}
+
+	// Upload photos if provided
+	var photoURLs []string
+	if len(photoFiles) > 0 {
+		for _, file := range photoFiles {
+			fileURL, err := h.fileStorage.SaveFile(file, "reports", strconv.FormatUint(uint64(report.ID), 10))
+			if err != nil {
+				BadRequest(c, err)
+				return
+			}
+			photoURLs = append(photoURLs, fileURL)
+		}
+	}
+
+	// Upload PDFs if provided
+	var pdfURLs []string
+	if len(pdfFiles) > 0 {
+		for _, file := range pdfFiles {
+			fileURL, err := h.fileStorage.SaveFile(file, "reports", strconv.FormatUint(uint64(report.ID), 10))
+			if err != nil {
+				BadRequest(c, err)
+				return
+			}
+			pdfURLs = append(pdfURLs, fileURL)
+		}
+	}
+
+	// Update report with file URLs if any files were uploaded
+	if len(photoURLs) > 0 || len(pdfURLs) > 0 {
+		photoURLsJSON, _ := json.Marshal(photoURLs)
+		pdfURLsJSON, _ := json.Marshal(pdfURLs)
+		
+		photoURLsStr := string(photoURLsJSON)
+		pdfURLsStr := string(pdfURLsJSON)
+		
+		report.PhotoURLs = &photoURLsStr
+		report.PDFURLs = &pdfURLsStr
+		
+		// Update report with file URLs via repository
+		if err := h.reportRepo.Update(&report); err != nil {
+			InternalServerError(c, err)
+			return
+		}
 	}
 
 	SuccessResponse(c, http.StatusCreated, report)
@@ -144,6 +246,29 @@ func (h *ReportHandler) DeleteReport(c *gin.Context) {
 	if err != nil {
 		BadRequest(c, err)
 		return
+	}
+
+	// Get report to check for files before deletion
+	report, err := h.reportService.GetReportByID(uint(id))
+	if err == nil && report != nil {
+		// Delete associated photo files
+		if report.PhotoURLs != nil {
+			var photoURLs []string
+			if err := json.Unmarshal([]byte(*report.PhotoURLs), &photoURLs); err == nil {
+				for _, url := range photoURLs {
+					h.fileStorage.DeleteFile(url)
+				}
+			}
+		}
+		// Delete associated PDF files
+		if report.PDFURLs != nil {
+			var pdfURLs []string
+			if err := json.Unmarshal([]byte(*report.PDFURLs), &pdfURLs); err == nil {
+				for _, url := range pdfURLs {
+					h.fileStorage.DeleteFile(url)
+				}
+			}
+		}
 	}
 
 	if err := h.reportService.DeleteReport(uint(id)); err != nil {

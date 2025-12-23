@@ -31,6 +31,7 @@ type Stop struct {
 	District   string         `json:"district"`
 	Facilities *string        `gorm:"type:jsonb" json:"facilities,omitempty"` // JSON string
 	Status     Status         `gorm:"type:varchar(20);default:'active'" json:"status"`
+	PhotoURL   *string        `json:"photo_url,omitempty"`
 	CreatedAt  time.Time      `json:"created_at"`
 	UpdatedAt  time.Time      `json:"updated_at"`
 	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`

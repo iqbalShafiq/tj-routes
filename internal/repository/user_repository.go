@@ -14,6 +14,7 @@ type UserRepository interface {
 	Update(user *models.User) error
 	Delete(id uint) error
 	List(offset, limit int) ([]models.User, int64, error)
+	Leaderboard(limit int) ([]models.User, error)
 }
 
 type userRepository struct {
@@ -73,5 +74,13 @@ func (r *userRepository) List(offset, limit int) ([]models.User, int64, error) {
 
 	err := r.db.Offset(offset).Limit(limit).Find(&users).Error
 	return users, total, err
+}
+
+func (r *userRepository) Leaderboard(limit int) ([]models.User, error) {
+	var users []models.User
+	err := r.db.Order("reputation_points DESC").
+		Limit(limit).
+		Find(&users).Error
+	return users, err
 }
 

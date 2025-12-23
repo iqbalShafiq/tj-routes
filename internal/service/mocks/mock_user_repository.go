@@ -58,3 +58,8 @@ func (m *MockUserRepository) List(offset, limit int) ([]models.User, int64, erro
 	return args.Get(0).([]models.User), args.Get(1).(int64), args.Error(2)
 }
 
+func (m *MockUserRepository) Leaderboard(limit int) ([]models.User, error) {
+	args := m.Called(limit)
+	return args.Get(0).([]models.User), args.Error(1)
+}
+

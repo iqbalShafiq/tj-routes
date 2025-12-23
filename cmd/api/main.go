@@ -173,6 +173,10 @@ func main() {
 	reportRepo := repository.NewReportRepository(db)
 	routeChangeRepo := repository.NewRouteChangeRepository(db)
 	bulkUploadLogRepo := repository.NewBulkUploadLogRepository(db)
+	commentRepo := repository.NewCommentRepository(db)
+	reactionRepo := repository.NewReactionRepository(db)
+	badgeRepo := repository.NewBadgeRepository(db)
+	userBadgeRepo := repository.NewUserBadgeRepository(db)
 
 	// Initialize file storage (needed for bulk upload service and handlers)
 	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.Host, cfg.Server.Port)
@@ -202,7 +206,23 @@ func main() {
 	stopService := service.NewStopService(stopRepo, cacheInstance, cfg)
 	routeService := service.NewRouteService(routeRepo, routeStopRepo, stopRepo, routeChangeRepo, cacheInstance, cfg)
 	vehicleService := service.NewVehicleService(vehicleRepo, routeRepo, cacheInstance, cfg)
-	reportService := service.NewReportService(reportRepo, routeRepo, stopRepo)
+	
+	// Initialize reputation and badge services
+	reputationService := service.NewReputationService(userRepo)
+	badgeService := service.NewBadgeService(badgeRepo, userBadgeRepo, userRepo, reportRepo, commentRepo, reactionRepo)
+	
+	// Initialize report service with reputation integration
+	reportService := service.NewReportServiceWithReputation(
+		reportRepo,
+		routeRepo,
+		stopRepo,
+		reputationService,
+		badgeService,
+	)
+	
+	// Initialize comment and reaction services
+	commentService := service.NewCommentService(commentRepo, reportRepo)
+	reactionService := service.NewReactionService(reactionRepo, reportRepo, commentRepo, reputationService)
 
 	// Initialize bulk upload service
 	var bulkUploadService service.BulkUploadService
@@ -267,6 +287,9 @@ func main() {
 	reportHandler := handler.NewReportHandler(reportService, userService, fileStorage, reportRepo)
 	userHandler := handler.NewUserHandler(userService)
 	docsHandler := handler.NewDocsHandler()
+	commentHandler := handler.NewCommentHandler(commentService)
+	reactionHandler := handler.NewReactionHandler(reactionService)
+	leaderboardHandler := handler.NewLeaderboardHandler(userRepo, badgeService, reputationService)
 
 	// Initialize bulk upload handler (always create, even if service is nil)
 	// This ensures routes are registered, but will return error if service unavailable
@@ -476,15 +499,52 @@ func main() {
 				reports.GET("/:id", reportHandler.GetReport)
 				reports.PUT("/:id/status", middleware.RequireAdmin(), reportHandler.UpdateReportStatus)
 				reports.DELETE("/:id", middleware.RequireAdmin(), reportHandler.DeleteReport)
+				
+				// Report comments
+				reports.GET("/:id/comments", commentHandler.GetComments)
+				reports.POST("/:id/comments", commentHandler.CreateComment)
+				
+				// Report reactions
+				reports.POST("/:id/react", reactionHandler.ReactToReport)
+				reports.DELETE("/:id/react", reactionHandler.RemoveReactionFromReport)
 			}
-
-			// Users (admin only)
-			users := protected.Group("/users")
-			users.Use(middleware.RequireAdmin())
+			
+			// Comments
+			comments := protected.Group("/comments")
 			{
-				users.GET("", userHandler.ListUsers)
-				users.GET("/:id", userHandler.GetUser)
-				users.PUT("/:id/role", userHandler.UpdateUserRole)
+				comments.PUT("/:id", commentHandler.UpdateComment)
+				comments.DELETE("/:id", commentHandler.DeleteComment)
+				
+				// Comment reactions
+				comments.POST("/:id/react", reactionHandler.ReactToComment)
+				comments.DELETE("/:id/react", reactionHandler.RemoveReactionFromComment)
+			}
+			
+			// Leaderboard and badges
+			leaderboard := protected.Group("/leaderboard")
+			{
+				leaderboard.GET("", leaderboardHandler.GetLeaderboard)
+			}
+			
+			badges := protected.Group("/badges")
+			{
+				badges.GET("", leaderboardHandler.GetAllBadges)
+			}
+			
+			// Users
+			users := protected.Group("/users")
+			{
+				// Public profile endpoint (authenticated users can view any profile)
+				users.GET("/:id/profile", leaderboardHandler.GetUserProfile)
+				
+				// Admin-only endpoints
+				adminUsers := users.Group("")
+				adminUsers.Use(middleware.RequireAdmin())
+				{
+					adminUsers.GET("", userHandler.ListUsers)
+					adminUsers.GET("/:id", userHandler.GetUser)
+					adminUsers.PUT("/:id/role", userHandler.UpdateUserRole)
+				}
 			}
 
 			// Bulk upload (admin only)

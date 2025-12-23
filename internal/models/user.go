@@ -21,16 +21,21 @@ const (
 )
 
 type User struct {
-	ID            uint         `gorm:"primaryKey" json:"id"`
-	Email         string       `gorm:"uniqueIndex;not null" json:"email"`
-	Username      string       `gorm:"uniqueIndex;not null" json:"username"`
-	Password      *string      `gorm:"type:varchar(255)" json:"-"` // Nullable for OAuth users
-	OAuthProvider *OAuthProvider `gorm:"type:varchar(50)" json:"oauth_provider,omitempty"`
-	OAuthID       *string      `gorm:"type:varchar(255)" json:"oauth_id,omitempty"`
-	Role          UserRole     `gorm:"type:varchar(20);default:'common_user'" json:"role"`
-	CreatedAt     time.Time    `json:"created_at"`
-	UpdatedAt     time.Time    `json:"updated_at"`
-	DeletedAt     gorm.DeletedAt `gorm:"index" json:"-"`
+	ID             uint           `gorm:"primaryKey" json:"id"`
+	Email          string         `gorm:"uniqueIndex;not null" json:"email"`
+	Username       string         `gorm:"uniqueIndex;not null" json:"username"`
+	Password       *string        `gorm:"type:varchar(255)" json:"-"` // Nullable for OAuth users
+	OAuthProvider  *OAuthProvider `gorm:"type:varchar(50)" json:"oauth_provider,omitempty"`
+	OAuthID        *string        `gorm:"type:varchar(255)" json:"oauth_id,omitempty"`
+	Role           UserRole       `gorm:"type:varchar(20);default:'common_user'" json:"role"`
+	ReputationPoints int         `gorm:"default:0" json:"reputation_points"`
+	Level          string         `gorm:"type:varchar(20);default:'newcomer'" json:"level"`
+	CreatedAt      time.Time      `json:"created_at"`
+	UpdatedAt      time.Time      `json:"updated_at"`
+	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
+
+	// Relationships
+	Badges []UserBadge `gorm:"foreignKey:UserID" json:"badges,omitempty"`
 }
 
 func (u *User) IsAdmin() bool {

@@ -17,9 +17,11 @@ type ReportService interface {
 }
 
 type reportService struct {
-	reportRepo repository.ReportRepository
-	routeRepo  repository.RouteRepository
-	stopRepo   repository.StopRepository
+	reportRepo        repository.ReportRepository
+	routeRepo         repository.RouteRepository
+	stopRepo          repository.StopRepository
+	reputationService ReputationService
+	badgeService      BadgeService
 }
 
 func NewReportService(
@@ -31,6 +33,22 @@ func NewReportService(
 		reportRepo: reportRepo,
 		routeRepo:  routeRepo,
 		stopRepo:   stopRepo,
+	}
+}
+
+func NewReportServiceWithReputation(
+	reportRepo repository.ReportRepository,
+	routeRepo repository.RouteRepository,
+	stopRepo repository.StopRepository,
+	reputationService ReputationService,
+	badgeService BadgeService,
+) ReportService {
+	return &reportService{
+		reportRepo:        reportRepo,
+		routeRepo:         routeRepo,
+		stopRepo:          stopRepo,
+		reputationService: reputationService,
+		badgeService:      badgeService,
 	}
 }
 
@@ -70,12 +88,46 @@ func (s *reportService) UpdateReportStatus(id uint, status models.ReportStatus, 
 		return errors.New("invalid status transition")
 	}
 
+	oldStatus := report.Status
 	report.Status = status
 	if adminNotes != nil {
 		report.AdminNotes = adminNotes
 	}
 
-	return s.reportRepo.Update(report)
+	if err := s.reportRepo.Update(report); err != nil {
+		return err
+	}
+
+	// Award points based on status change
+	if s.reputationService != nil {
+		var pointsToAward int
+		switch status {
+		case models.ReportStatusReviewed:
+			// Only award if transitioning from pending
+			if oldStatus == models.ReportStatusPending {
+				pointsToAward = 10
+			}
+		case models.ReportStatusResolved:
+			// Award 25 points if transitioning to resolved
+			// If already reviewed, award the difference (15 points)
+			if oldStatus == models.ReportStatusPending {
+				pointsToAward = 25
+			} else if oldStatus == models.ReportStatusReviewed {
+				pointsToAward = 15 // Total 25, already got 10
+			}
+		}
+
+		if pointsToAward > 0 {
+			if err := s.reputationService.AddPoints(report.UserID, pointsToAward); err == nil {
+				// Check for badges after awarding points
+				if s.badgeService != nil {
+					s.badgeService.CheckAndAwardBadges(report.UserID)
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func (s *reportService) DeleteReport(id uint) error {

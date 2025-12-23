@@ -87,6 +87,12 @@ func main() {
 	stopRepo := repository.NewStopRepository(db)
 	routeRepo := repository.NewRouteRepository(db)
 	routeStopRepo := repository.NewRouteStopRepository(db)
+	badgeRepo := repository.NewBadgeRepository(db)
+
+	// Seed badges first
+	if err := seedBadges(badgeRepo); err != nil {
+		log.Fatalf("Failed to seed badges: %v", err)
+	}
 
 	// Seed data
 	if err := seedData(db, stopRepo, routeRepo, routeStopRepo, adminUser.ID); err != nil {
@@ -139,6 +145,122 @@ func findOrCreateAdmin(userRepo repository.UserRepository) (*models.User, error)
 	}
 
 	return admin, nil
+}
+
+func seedBadges(badgeRepo repository.BadgeRepository) error {
+	badges := []models.Badge{
+		{
+			Name:          "First Report",
+			Description:   "Submitted your first report",
+			Icon:          "🎯",
+			CriteriaType:  models.BadgeCriteriaReportsAccepted,
+			CriteriaValue: 1,
+		},
+		{
+			Name:          "Helpful Contributor",
+			Description:   "Submitted 5 accepted reports",
+			Icon:          "⭐",
+			CriteriaType:  models.BadgeCriteriaReportsAccepted,
+			CriteriaValue: 5,
+		},
+		{
+			Name:          "Dedicated Reporter",
+			Description:   "Submitted 10 accepted reports",
+			Icon:          "🏆",
+			CriteriaType:  models.BadgeCriteriaReportsAccepted,
+			CriteriaValue: 10,
+		},
+		{
+			Name:          "Community Voice",
+			Description:   "Made 10 comments",
+			Icon:          "💬",
+			CriteriaType:  models.BadgeCriteriaCommentsMade,
+			CriteriaValue: 10,
+		},
+		{
+			Name:          "Active Commenter",
+			Description:   "Made 50 comments",
+			Icon:          "🗣️",
+			CriteriaType:  models.BadgeCriteriaCommentsMade,
+			CriteriaValue: 50,
+		},
+		{
+			Name:          "Popular Contributor",
+			Description:   "Received 25 upvotes on your content",
+			Icon:          "👍",
+			CriteriaType:  models.BadgeCriteriaUpvotesReceived,
+			CriteriaValue: 25,
+		},
+		{
+			Name:          "Community Favorite",
+			Description:   "Received 100 upvotes on your content",
+			Icon:          "❤️",
+			CriteriaType:  models.BadgeCriteriaUpvotesReceived,
+			CriteriaValue: 100,
+		},
+		{
+			Name:          "Rising Star",
+			Description:   "Reached 50 reputation points",
+			Icon:          "🌟",
+			CriteriaType:  models.BadgeCriteriaReputationPoints,
+			CriteriaValue: 50,
+		},
+		{
+			Name:          "Trusted Member",
+			Description:   "Reached 200 reputation points",
+			Icon:          "✨",
+			CriteriaType:  models.BadgeCriteriaReputationPoints,
+			CriteriaValue: 200,
+		},
+		{
+			Name:          "Expert Contributor",
+			Description:   "Reached 500 reputation points",
+			Icon:          "🎖️",
+			CriteriaType:  models.BadgeCriteriaReputationPoints,
+			CriteriaValue: 500,
+		},
+		{
+			Name:          "Legend",
+			Description:   "Reached 1000 reputation points",
+			Icon:          "👑",
+			CriteriaType:  models.BadgeCriteriaReputationPoints,
+			CriteriaValue: 1000,
+		},
+	}
+
+	fmt.Println("Seeding badges...")
+	for _, badge := range badges {
+		// Check if badge already exists
+		existing, err := badgeRepo.FindByID(badge.ID)
+		if err == nil && existing != nil {
+			fmt.Printf("  ⊙ Badge already exists: %s\n", badge.Name)
+			continue
+		}
+
+		// Try to find by name
+		allBadges, _ := badgeRepo.FindAll()
+		exists := false
+		for _, b := range allBadges {
+			if b.Name == badge.Name {
+				exists = true
+				break
+			}
+		}
+
+		if exists {
+			fmt.Printf("  ⊙ Badge already exists: %s\n", badge.Name)
+			continue
+		}
+
+		if err := badgeRepo.Create(&badge); err != nil {
+			fmt.Printf("  ⚠ Warning: Failed to create badge %s: %v\n", badge.Name, err)
+			continue
+		}
+
+		fmt.Printf("  ✓ Created badge: %s\n", badge.Name)
+	}
+
+	return nil
 }
 
 func seedData(

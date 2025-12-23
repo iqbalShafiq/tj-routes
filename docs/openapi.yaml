@@ -39,6 +39,14 @@ tags:
     description: User management (Admin only)
   - name: BulkUpload
     description: Bulk CSV upload for routes, stops, and vehicles (Admin only)
+  - name: Comments
+    description: Comment management for reports
+  - name: Reactions
+    description: Upvote/downvote reactions on reports and comments
+  - name: Leaderboard
+    description: User leaderboard and reputation system
+  - name: Badges
+    description: Achievement badges system
   - name: Health
     description: Health check endpoint
 
@@ -867,6 +875,355 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/reports/{id}/comments:
+    get:
+      tags:
+        - Comments
+      summary: Get comments for a report
+      description: Get all threaded comments for a specific report
+      operationId: getReportComments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of comments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                data:
+                  comments:
+                    - id: 1
+                      report_id: 1
+                      user_id: 2
+                      content: "Great report!"
+                      upvotes: 5
+                      downvotes: 0
+                      created_at: "2024-01-01T00:00:00Z"
+                      replies: []
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags:
+        - Comments
+      summary: Add comment to report
+      description: Add a comment to a report (can be a reply to another comment)
+      operationId: createComment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCommentRequest"
+      responses:
+        "201":
+          description: Comment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/reports/{id}/react:
+    post:
+      tags:
+        - Reactions
+      summary: React to a report
+      description: Add or toggle an upvote/downvote reaction on a report
+      operationId: reactToReport
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReactRequest"
+      responses:
+        "200":
+          description: Reaction updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags:
+        - Reactions
+      summary: Remove reaction from report
+      description: Remove your reaction from a report
+      operationId: removeReportReaction
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reaction removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/comments/{id}:
+    put:
+      tags:
+        - Comments
+      summary: Update comment
+      description: Update your own comment
+      operationId: updateComment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCommentRequest"
+      responses:
+        "200":
+          description: Comment updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    delete:
+      tags:
+        - Comments
+      summary: Delete comment
+      description: Delete your own comment
+      operationId: deleteComment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Comment deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/comments/{id}/react:
+    post:
+      tags:
+        - Reactions
+      summary: React to a comment
+      description: Add or toggle an upvote/downvote reaction on a comment
+      operationId: reactToComment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReactRequest"
+      responses:
+        "200":
+          description: Reaction updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags:
+        - Reactions
+      summary: Remove reaction from comment
+      description: Remove your reaction from a comment
+      operationId: removeCommentReaction
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reaction removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/leaderboard:
+    get:
+      tags:
+        - Leaderboard
+      summary: Get leaderboard
+      description: Get top users by reputation points
+      operationId: getLeaderboard
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+      responses:
+        "200":
+          description: Leaderboard data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                data:
+                  leaderboard:
+                    - id: 1
+                      username: "user1"
+                      reputation_points: 500
+                      level: "expert"
+                  limit: 10
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/users/{id}/profile:
+    get:
+      tags:
+        - Leaderboard
+      summary: Get user profile
+      description: Get user profile with reputation points, level, and badges
+      operationId: getUserProfile
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: User profile data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                data:
+                  user:
+                    id: 1
+                    username: "user1"
+                    email: "user1@example.com"
+                  reputation_points: 250
+                  level: "trusted"
+                  badges:
+                    - id: 1
+                      badge_id: 1
+                      earned_at: "2024-01-01T00:00:00Z"
+                      badge:
+                        id: 1
+                        name: "First Report"
+                        description: "Submitted your first report"
+                        icon: "🎯"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/badges:
+    get:
+      tags:
+        - Badges
+      summary: Get all badges
+      description: Get list of all available badges
+      operationId: getAllBadges
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of badges
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                data:
+                  badges:
+                    - id: 1
+                      name: "First Report"
+                      description: "Submitted your first report"
+                      icon: "🎯"
+                      criteria_type: "reports_accepted"
+                      criteria_value: 1
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /api/v1/users:
     get:
       tags:
@@ -1186,6 +1543,15 @@ components:
         oauth_id:
           type: string
           nullable: true
+        reputation_points:
+          type: integer
+          default: 0
+          example: 150
+        level:
+          type: string
+          enum: [newcomer, contributor, trusted, expert, legend]
+          default: newcomer
+          example: contributor
         created_at:
           type: string
           format: date-time
@@ -1432,6 +1798,18 @@ components:
           description: Array of PDF document URLs
           example:
             ["http://localhost:8080/uploads/reports/1/document_1234567890.pdf"]
+        upvotes:
+          type: integer
+          default: 0
+          example: 15
+        downvotes:
+          type: integer
+          default: 0
+          example: 2
+        comment_count:
+          type: integer
+          default: 0
+          example: 8
         created_at:
           type: string
           format: date-time
@@ -1462,6 +1840,160 @@ components:
           type: string
           enum: [common_user, admin]
           example: admin
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        report_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 2
+        parent_id:
+          type: integer
+          nullable: true
+          description: ID of parent comment for threaded replies
+          example: null
+        content:
+          type: string
+          example: "Great report! This is very helpful."
+        upvotes:
+          type: integer
+          default: 0
+          example: 5
+        downvotes:
+          type: integer
+          default: 0
+          example: 0
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        user:
+          $ref: "#/components/schemas/User"
+        replies:
+          type: array
+          items:
+            $ref: "#/components/schemas/Comment"
+          description: Child comments (replies)
+
+    CreateCommentRequest:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          minLength: 1
+          example: "This is a helpful comment"
+        parent_id:
+          type: integer
+          nullable: true
+          description: ID of parent comment if this is a reply
+          example: null
+
+    UpdateCommentRequest:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+          minLength: 1
+          example: "Updated comment content"
+
+    Reaction:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 1
+        target_type:
+          type: string
+          enum: [report, comment]
+          example: report
+        target_id:
+          type: integer
+          example: 1
+        reaction_type:
+          type: string
+          enum: [upvote, downvote]
+          example: upvote
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+
+    ReactRequest:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [upvote, downvote]
+          example: upvote
+
+    Badge:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "First Report"
+        description:
+          type: string
+          example: "Submitted your first report"
+        icon:
+          type: string
+          example: "🎯"
+        criteria_type:
+          type: string
+          enum: [reports_accepted, comments_made, upvotes_received, reputation_points]
+          example: reports_accepted
+        criteria_value:
+          type: integer
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+
+    UserBadge:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 1
+        badge_id:
+          type: integer
+          example: 1
+        earned_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        badge:
+          $ref: "#/components/schemas/Badge"
 
     SuccessResponse:
       type: object

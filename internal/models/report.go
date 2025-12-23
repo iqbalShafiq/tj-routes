@@ -35,6 +35,9 @@ type Report struct {
 	AdminNotes     *string        `gorm:"type:text" json:"admin_notes,omitempty"`
 	PhotoURLs      *string        `gorm:"type:jsonb" json:"photo_urls,omitempty"` // JSON array of URLs
 	PDFURLs        *string        `gorm:"type:jsonb" json:"pdf_urls,omitempty"`   // JSON array of URLs
+	Upvotes        int            `gorm:"default:0" json:"upvotes"`
+	Downvotes      int            `gorm:"default:0" json:"downvotes"`
+	CommentCount   int            `gorm:"default:0" json:"comment_count"`
 	CreatedAt      time.Time      `json:"created_at"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`

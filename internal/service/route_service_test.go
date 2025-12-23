@@ -3,6 +3,8 @@ package service
 import (
 	"testing"
 
+	"tj-routes/internal/cache"
+	"tj-routes/internal/config"
 	"tj-routes/internal/models"
 	"tj-routes/internal/service/mocks"
 
@@ -10,6 +12,21 @@ import (
 	"github.com/stretchr/testify/mock"
 	"gorm.io/gorm"
 )
+
+func getTestCache() cache.Cache {
+	return cache.NewNoOpCache()
+}
+
+func getTestConfig() *config.Config {
+	return &config.Config{
+		Cache: config.CacheConfig{
+			RouteTTL:      30,
+			StopTTL:       60,
+			VehicleTTL:    15,
+			SystemUserTTL: 1440,
+		},
+	}
+}
 
 func TestRouteService_CreateRoute(t *testing.T) {
 	tests := []struct {
@@ -74,7 +91,7 @@ func TestRouteService_CreateRoute(t *testing.T) {
 			mockRouteChangeRepo := mocks.NewMockRouteChangeRepository()
 			tt.setupMocks(mockRouteRepo, mockRouteStopRepo, mockStopRepo, mockRouteChangeRepo)
 
-			service := NewRouteService(mockRouteRepo, mockRouteStopRepo, mockStopRepo, mockRouteChangeRepo)
+			service := NewRouteService(mockRouteRepo, mockRouteStopRepo, mockStopRepo, mockRouteChangeRepo, getTestCache(), getTestConfig())
 			err := service.CreateRoute(tt.route, tt.stopIDs, tt.userID)
 
 			if tt.expectError {
@@ -107,7 +124,7 @@ func TestRouteService_GetRouteByID(t *testing.T) {
 
 	mockRepo.On("FindByID", uint(1)).Return(expectedRoute, nil)
 
-	service := NewRouteService(mockRepo, mocks.NewMockRouteStopRepository(), mocks.NewMockStopRepository(), mocks.NewMockRouteChangeRepository())
+	service := NewRouteService(mockRepo, mocks.NewMockRouteStopRepository(), mocks.NewMockStopRepository(), mocks.NewMockRouteChangeRepository(), getTestCache(), getTestConfig())
 	route, err := service.GetRouteByID(1)
 
 	assert.NoError(t, err)
@@ -129,7 +146,7 @@ func TestRouteService_UpdateRoute(t *testing.T) {
 
 	mockRepo.On("Update", route).Return(nil)
 
-	service := NewRouteService(mockRepo, mocks.NewMockRouteStopRepository(), mocks.NewMockStopRepository(), mocks.NewMockRouteChangeRepository())
+	service := NewRouteService(mockRepo, mocks.NewMockRouteStopRepository(), mocks.NewMockStopRepository(), mocks.NewMockRouteChangeRepository(), getTestCache(), getTestConfig())
 	err := service.UpdateRoute(route)
 
 	assert.NoError(t, err)
@@ -209,7 +226,7 @@ func TestRouteService_UpdateRouteStops(t *testing.T) {
 			mockRouteChangeRepo := mocks.NewMockRouteChangeRepository()
 			tt.setupMocks(mockRouteRepo, mockRouteStopRepo, mockStopRepo, mockRouteChangeRepo)
 
-			service := NewRouteService(mockRouteRepo, mockRouteStopRepo, mockStopRepo, mockRouteChangeRepo)
+			service := NewRouteService(mockRouteRepo, mockRouteStopRepo, mockStopRepo, mockRouteChangeRepo, getTestCache(), getTestConfig())
 			err := service.UpdateRouteStops(tt.routeID, tt.stopIDs, tt.userID)
 
 			if tt.expectError {
@@ -239,7 +256,7 @@ func TestRouteService_DeleteRoute(t *testing.T) {
 	mockRouteStopRepo.On("DeleteByRouteID", uint(1)).Return(nil)
 	mockRouteRepo.On("Delete", uint(1)).Return(nil)
 
-	service := NewRouteService(mockRouteRepo, mockRouteStopRepo, mocks.NewMockStopRepository(), mocks.NewMockRouteChangeRepository())
+	service := NewRouteService(mockRouteRepo, mockRouteStopRepo, mocks.NewMockStopRepository(), mocks.NewMockRouteChangeRepository(), getTestCache(), getTestConfig())
 	err := service.DeleteRoute(1)
 
 	assert.NoError(t, err)
@@ -261,7 +278,7 @@ func TestRouteService_ListRoutes(t *testing.T) {
 
 	mockRepo.On("List", 0, 10, filters).Return(expectedRoutes, expectedTotal, nil)
 
-	service := NewRouteService(mockRepo, mocks.NewMockRouteStopRepository(), mocks.NewMockStopRepository(), mocks.NewMockRouteChangeRepository())
+	service := NewRouteService(mockRepo, mocks.NewMockRouteStopRepository(), mocks.NewMockStopRepository(), mocks.NewMockRouteChangeRepository(), getTestCache(), getTestConfig())
 	routes, total, err := service.ListRoutes(0, 10, filters)
 
 	assert.NoError(t, err)

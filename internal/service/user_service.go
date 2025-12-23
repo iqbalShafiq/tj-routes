@@ -1,9 +1,12 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"time"
 
+	"tj-routes/internal/cache"
 	"tj-routes/internal/config"
 	"tj-routes/internal/models"
 	"tj-routes/internal/repository"
@@ -26,12 +29,14 @@ type UserService interface {
 type userService struct {
 	userRepo repository.UserRepository
 	config   *config.Config
+	cache    cache.Cache
 }
 
-func NewUserService(userRepo repository.UserRepository, cfg *config.Config) UserService {
+func NewUserService(userRepo repository.UserRepository, cfg *config.Config, cacheInstance cache.Cache) UserService {
 	return &userService{
 		userRepo: userRepo,
 		config:   cfg,
+		cache:    cacheInstance,
 	}
 }
 
@@ -188,11 +193,22 @@ func (s *userService) UpdateUserRole(userID uint, role models.UserRole) error {
 
 func (s *userService) GetSystemUser() (*models.User, error) {
 	const systemUserEmail = "system@tj-routes.local"
+	ctx := context.Background()
+	key := cache.SystemUserKey()
 
-	// Try to find existing system user
-	user, err := s.userRepo.FindByEmail(systemUserEmail)
+	// Try to get from cache
+	var user models.User
+	if err := s.cache.Get(ctx, key, &user); err == nil {
+		return &user, nil
+	}
+
+	// Cache miss, try to find existing system user
+	userPtr, err := s.userRepo.FindByEmail(systemUserEmail)
 	if err == nil {
-		return user, nil
+		// Store in cache with long TTL
+		ttl := time.Duration(s.config.Cache.SystemUserTTL) * time.Minute
+		s.cache.Set(ctx, key, *userPtr, ttl)
+		return userPtr, nil
 	}
 
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -200,17 +216,21 @@ func (s *userService) GetSystemUser() (*models.User, error) {
 	}
 
 	// System user doesn't exist, create it
-	user = &models.User{
+	userPtr = &models.User{
 		Email:    systemUserEmail,
 		Username: "system",
 		Role:     models.RoleCommonUser,
 		Password: nil, // No password for system user
 	}
 
-	if err := s.userRepo.Create(user); err != nil {
+	if err := s.userRepo.Create(userPtr); err != nil {
 		return nil, fmt.Errorf("failed to create system user: %w", err)
 	}
 
-	return user, nil
+	// Store in cache with long TTL
+	ttl := time.Duration(s.config.Cache.SystemUserTTL) * time.Minute
+	s.cache.Set(ctx, key, *userPtr, ttl)
+
+	return userPtr, nil
 }
 

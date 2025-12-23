@@ -83,7 +83,7 @@ func TestStopService_CreateStop(t *testing.T) {
 			mockRepo := mocks.NewMockStopRepository()
 			tt.setupMock(mockRepo)
 
-			service := NewStopService(mockRepo)
+			service := NewStopService(mockRepo, getTestCache(), getTestConfig())
 			err := service.CreateStop(tt.stop)
 
 			if tt.expectError {
@@ -113,7 +113,7 @@ func TestStopService_GetStopByID(t *testing.T) {
 
 	mockRepo.On("FindByID", uint(1)).Return(expectedStop, nil)
 
-	service := NewStopService(mockRepo)
+	service := NewStopService(mockRepo, getTestCache(), getTestConfig())
 	stop, err := service.GetStopByID(1)
 
 	assert.NoError(t, err)
@@ -169,7 +169,7 @@ func TestStopService_UpdateStop(t *testing.T) {
 			mockRepo := mocks.NewMockStopRepository()
 			tt.setupMock(mockRepo)
 
-			service := NewStopService(mockRepo)
+			service := NewStopService(mockRepo, getTestCache(), getTestConfig())
 			err := service.UpdateStop(tt.stop)
 
 			if tt.expectError {
@@ -190,7 +190,7 @@ func TestStopService_DeleteStop(t *testing.T) {
 	mockRepo := mocks.NewMockStopRepository()
 	mockRepo.On("Delete", uint(1)).Return(nil)
 
-	service := NewStopService(mockRepo)
+	service := NewStopService(mockRepo, getTestCache(), getTestConfig())
 	err := service.DeleteStop(1)
 
 	assert.NoError(t, err)
@@ -211,7 +211,7 @@ func TestStopService_ListStops(t *testing.T) {
 
 	mockRepo.On("List", 0, 10, filters).Return(expectedStops, expectedTotal, nil)
 
-	service := NewStopService(mockRepo)
+	service := NewStopService(mockRepo, getTestCache(), getTestConfig())
 	stops, total, err := service.ListStops(0, 10, filters)
 
 	assert.NoError(t, err)

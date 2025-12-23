@@ -1,9 +1,13 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
+	"tj-routes/internal/cache"
+	"tj-routes/internal/config"
 	"tj-routes/internal/models"
 	"tj-routes/internal/repository"
 )
@@ -22,6 +26,8 @@ type routeService struct {
 	routeStopRepo  repository.RouteStopRepository
 	stopRepo       repository.StopRepository
 	routeChangeRepo repository.RouteChangeRepository
+	cache          cache.Cache
+	config         *config.Config
 }
 
 func NewRouteService(
@@ -29,12 +35,16 @@ func NewRouteService(
 	routeStopRepo repository.RouteStopRepository,
 	stopRepo repository.StopRepository,
 	routeChangeRepo repository.RouteChangeRepository,
+	cacheInstance cache.Cache,
+	cfg *config.Config,
 ) RouteService {
 	return &routeService{
 		routeRepo:      routeRepo,
 		routeStopRepo:  routeStopRepo,
 		stopRepo:       stopRepo,
 		routeChangeRepo: routeChangeRepo,
+		cache:          cacheInstance,
+		config:         cfg,
 	}
 }
 
@@ -82,15 +92,47 @@ func (s *routeService) CreateRoute(route *models.Route, stopIDs []uint, userID u
 	}
 	s.routeChangeRepo.Create(routeChange)
 
+	// Invalidate cache
+	ctx := context.Background()
+	s.cache.InvalidatePattern(ctx, cache.RoutePattern())
+
 	return nil
 }
 
 func (s *routeService) GetRouteByID(id uint) (*models.Route, error) {
-	return s.routeRepo.FindByID(id)
+	ctx := context.Background()
+	key := cache.RouteKey(id)
+
+	// Try to get from cache
+	var route models.Route
+	if err := s.cache.Get(ctx, key, &route); err == nil {
+		return &route, nil
+	}
+
+	// Cache miss, get from database
+	routePtr, err := s.routeRepo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Store in cache
+	ttl := time.Duration(s.config.Cache.RouteTTL) * time.Minute
+	s.cache.Set(ctx, key, *routePtr, ttl)
+
+	return routePtr, nil
 }
 
 func (s *routeService) UpdateRoute(route *models.Route) error {
-	return s.routeRepo.Update(route)
+	if err := s.routeRepo.Update(route); err != nil {
+		return err
+	}
+
+	// Invalidate cache
+	ctx := context.Background()
+	s.cache.Delete(ctx, cache.RouteKey(route.ID))
+	s.cache.InvalidatePattern(ctx, cache.RoutePattern())
+
+	return nil
 }
 
 func (s *routeService) UpdateRouteStops(routeID uint, stopIDs []uint, userID uint) error {
@@ -157,6 +199,11 @@ func (s *routeService) UpdateRouteStops(routeID uint, stopIDs []uint, userID uin
 	}
 	s.routeChangeRepo.Create(routeChange)
 
+	// Invalidate cache
+	ctx := context.Background()
+	s.cache.Delete(ctx, cache.RouteKey(routeID))
+	s.cache.InvalidatePattern(ctx, cache.RoutePattern())
+
 	return nil
 }
 
@@ -165,11 +212,57 @@ func (s *routeService) DeleteRoute(id uint) error {
 	if err := s.routeStopRepo.DeleteByRouteID(id); err != nil {
 		return err
 	}
-	return s.routeRepo.Delete(id)
+	if err := s.routeRepo.Delete(id); err != nil {
+		return err
+	}
+
+	// Invalidate cache
+	ctx := context.Background()
+	s.cache.Delete(ctx, cache.RouteKey(id))
+	s.cache.InvalidatePattern(ctx, cache.RoutePattern())
+
+	return nil
 }
 
 func (s *routeService) ListRoutes(offset, limit int, filters map[string]interface{}) ([]models.Route, int64, error) {
-	return s.routeRepo.List(offset, limit, filters)
+	ctx := context.Background()
+
+	// Build cache key from filters
+	page := (offset / limit) + 1
+	if limit == 0 {
+		limit = 10
+	}
+	status := ""
+	routeNumber := ""
+	if s, ok := filters["status"].(models.Status); ok {
+		status = string(s)
+	}
+	if rn, ok := filters["route_number"].(string); ok {
+		routeNumber = rn
+	}
+	key := cache.RouteListKey(page, limit, status, routeNumber)
+
+	// Try to get from cache
+	type cachedResult struct {
+		Routes []models.Route `json:"routes"`
+		Total  int64          `json:"total"`
+	}
+	var cached cachedResult
+	if err := s.cache.Get(ctx, key, &cached); err == nil {
+		return cached.Routes, cached.Total, nil
+	}
+
+	// Cache miss, get from database
+	routes, total, err := s.routeRepo.List(offset, limit, filters)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Store in cache
+	ttl := time.Duration(s.config.Cache.RouteTTL) * time.Minute
+	s.cache.Set(ctx, key, cachedResult{Routes: routes, Total: total}, ttl)
+
+	return routes, total, nil
 }
 
 func stringPtr(s string) *string {

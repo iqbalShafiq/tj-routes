@@ -157,6 +157,12 @@ func main() {
 	}
 	logger.Info("System user ensured", zap.Uint("system_user_id", systemUserID))
 
+	// Initialize Redis cache
+	cacheInstance, err := utils.InitRedis(cfg, logger)
+	if err != nil {
+		logger.Warn("Failed to initialize Redis cache, continuing without cache", zap.Error(err))
+	}
+
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
 	stopRepo := repository.NewStopRepository(db)
@@ -166,11 +172,11 @@ func main() {
 	reportRepo := repository.NewReportRepository(db)
 	routeChangeRepo := repository.NewRouteChangeRepository(db)
 
-	// Initialize services
-	userService := service.NewUserService(userRepo, cfg)
-	stopService := service.NewStopService(stopRepo)
-	routeService := service.NewRouteService(routeRepo, routeStopRepo, stopRepo, routeChangeRepo)
-	vehicleService := service.NewVehicleService(vehicleRepo, routeRepo)
+	// Initialize services with cache
+	userService := service.NewUserService(userRepo, cfg, cacheInstance)
+	stopService := service.NewStopService(stopRepo, cacheInstance, cfg)
+	routeService := service.NewRouteService(routeRepo, routeStopRepo, stopRepo, routeChangeRepo, cacheInstance, cfg)
+	vehicleService := service.NewVehicleService(vehicleRepo, routeRepo, cacheInstance, cfg)
 	reportService := service.NewReportService(reportRepo, routeRepo, stopRepo)
 
 	// Initialize handlers

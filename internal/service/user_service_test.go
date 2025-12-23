@@ -66,7 +66,7 @@ func TestUserService_Register(t *testing.T) {
 				},
 			}
 
-			service := NewUserService(mockRepo, cfg)
+			service := NewUserService(mockRepo, cfg, getTestCache())
 			user, err := service.Register(tt.email, tt.username, tt.password)
 
 			if tt.expectError {
@@ -136,7 +136,7 @@ func TestUserService_Login(t *testing.T) {
 				},
 			}
 
-			service := NewUserService(mockRepo, cfg)
+			service := NewUserService(mockRepo, cfg, getTestCache())
 
 			// Note: This test will fail on password verification since we're using a dummy hash
 			// In a real test, you'd want to use a properly hashed password or mock the password utility

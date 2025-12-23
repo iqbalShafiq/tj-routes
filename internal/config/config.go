@@ -13,6 +13,8 @@ type Config struct {
 	JWT      JWTConfig
 	OAuth    OAuthConfig
 	Logging  LoggingConfig
+	Redis    RedisConfig
+	Cache    CacheConfig
 }
 
 type ServerConfig struct {
@@ -67,6 +69,22 @@ type LoggingConfig struct {
 	ErrorLogFile string // Path to error log file (optional, errors will also go to stderr)
 }
 
+type RedisConfig struct {
+	Host     string
+	Port     string
+	Password string
+	DB       int
+	PoolSize int
+}
+
+type CacheConfig struct {
+	Enabled           bool
+	RouteTTL          int // TTL in minutes
+	StopTTL           int // TTL in minutes
+	VehicleTTL        int // TTL in minutes
+	SystemUserTTL     int // TTL in minutes
+}
+
 func Load() (*Config, error) {
 	config := &Config{
 		Server: ServerConfig{
@@ -102,6 +120,20 @@ func Load() (*Config, error) {
 		Logging: LoggingConfig{
 			Level:        getEnv("LOG_LEVEL", "info"),
 			ErrorLogFile: getEnv("ERROR_LOG_FILE", ""),
+		},
+		Redis: RedisConfig{
+			Host:     getEnv("REDIS_HOST", "localhost"),
+			Port:     getEnv("REDIS_PORT", "6379"),
+			Password: getEnv("REDIS_PASSWORD", ""),
+			DB:       getEnvAsInt("REDIS_DB", 0),
+			PoolSize: getEnvAsInt("REDIS_POOL_SIZE", 10),
+		},
+		Cache: CacheConfig{
+			Enabled:       getEnvAsBool("CACHE_ENABLED", true),
+			RouteTTL:      getEnvAsInt("CACHE_ROUTE_TTL", 30),      // 30 minutes
+			StopTTL:       getEnvAsInt("CACHE_STOP_TTL", 60),       // 1 hour
+			VehicleTTL:    getEnvAsInt("CACHE_VEHICLE_TTL", 15),    // 15 minutes
+			SystemUserTTL: getEnvAsInt("CACHE_SYSTEM_USER_TTL", 1440), // 24 hours
 		},
 	}
 

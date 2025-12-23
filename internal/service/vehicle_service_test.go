@@ -55,7 +55,7 @@ func TestVehicleService_CreateVehicle(t *testing.T) {
 			mockRouteRepo := mocks.NewMockRouteRepository()
 			tt.setupMocks(mockVehicleRepo, mockRouteRepo)
 
-			service := NewVehicleService(mockVehicleRepo, mockRouteRepo)
+			service := NewVehicleService(mockVehicleRepo, mockRouteRepo, getTestCache(), getTestConfig())
 			err := service.CreateVehicle(tt.vehicle)
 
 			if tt.expectError {
@@ -83,7 +83,7 @@ func TestVehicleService_GetVehicleByID(t *testing.T) {
 
 	mockRepo.On("FindByID", uint(1)).Return(expectedVehicle, nil)
 
-	service := NewVehicleService(mockRepo, mocks.NewMockRouteRepository())
+	service := NewVehicleService(mockRepo, mocks.NewMockRouteRepository(), getTestCache(), getTestConfig())
 	vehicle, err := service.GetVehicleByID(1)
 
 	assert.NoError(t, err)
@@ -135,7 +135,7 @@ func TestVehicleService_UpdateVehicle(t *testing.T) {
 			mockRouteRepo := mocks.NewMockRouteRepository()
 			tt.setupMocks(mockVehicleRepo, mockRouteRepo)
 
-			service := NewVehicleService(mockVehicleRepo, mockRouteRepo)
+			service := NewVehicleService(mockVehicleRepo, mockRouteRepo, getTestCache(), getTestConfig())
 			err := service.UpdateVehicle(tt.vehicle)
 
 			if tt.expectError {
@@ -154,7 +154,7 @@ func TestVehicleService_DeleteVehicle(t *testing.T) {
 	mockRepo := mocks.NewMockVehicleRepository()
 	mockRepo.On("Delete", uint(1)).Return(nil)
 
-	service := NewVehicleService(mockRepo, mocks.NewMockRouteRepository())
+	service := NewVehicleService(mockRepo, mocks.NewMockRouteRepository(), getTestCache(), getTestConfig())
 	err := service.DeleteVehicle(1)
 
 	assert.NoError(t, err)
@@ -175,7 +175,7 @@ func TestVehicleService_ListVehicles(t *testing.T) {
 
 	mockRepo.On("List", 0, 10, filters).Return(expectedVehicles, expectedTotal, nil)
 
-	service := NewVehicleService(mockRepo, mocks.NewMockRouteRepository())
+	service := NewVehicleService(mockRepo, mocks.NewMockRouteRepository(), getTestCache(), getTestConfig())
 	vehicles, total, err := service.ListVehicles(0, 10, filters)
 
 	assert.NoError(t, err)

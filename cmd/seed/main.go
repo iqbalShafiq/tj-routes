@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"tj-routes/internal/config"
 	"tj-routes/internal/models"
@@ -75,6 +77,13 @@ func main() {
 		}
 	}()
 
+	// Run migrations first
+	fmt.Println("Running database migrations...")
+	if err := utils.AutoMigrate(db); err != nil {
+		log.Fatalf("Failed to run migrations: %v", err)
+	}
+	fmt.Println("✓ Database migrations completed")
+
 	// Find admin user
 	userRepo := repository.NewUserRepository(db)
 	adminUser, err := findOrCreateAdmin(userRepo)
@@ -88,15 +97,56 @@ func main() {
 	routeRepo := repository.NewRouteRepository(db)
 	routeStopRepo := repository.NewRouteStopRepository(db)
 	badgeRepo := repository.NewBadgeRepository(db)
+	userBadgeRepo := repository.NewUserBadgeRepository(db)
+	vehicleRepo := repository.NewVehicleRepository(db)
+	reportRepo := repository.NewReportRepository(db)
+	commentRepo := repository.NewCommentRepository(db)
+	reactionRepo := repository.NewReactionRepository(db)
+	routeChangeRepo := repository.NewRouteChangeRepository(db)
 
 	// Seed badges first
 	if err := seedBadges(badgeRepo); err != nil {
 		log.Fatalf("Failed to seed badges: %v", err)
 	}
 
-	// Seed data
+	// Seed users
+	if err := seedUsers(userRepo); err != nil {
+		log.Fatalf("Failed to seed users: %v", err)
+	}
+
+	// Seed data (stops and routes)
 	if err := seedData(db, stopRepo, routeRepo, routeStopRepo, adminUser.ID); err != nil {
 		log.Fatalf("Failed to seed data: %v", err)
+	}
+
+	// Seed vehicles
+	if err := seedVehicles(db, vehicleRepo, routeRepo); err != nil {
+		log.Fatalf("Failed to seed vehicles: %v", err)
+	}
+
+	// Seed reports
+	if err := seedReports(db, reportRepo, userRepo, routeRepo, stopRepo); err != nil {
+		log.Fatalf("Failed to seed reports: %v", err)
+	}
+
+	// Seed comments
+	if err := seedComments(db, commentRepo, reportRepo, userRepo); err != nil {
+		log.Fatalf("Failed to seed comments: %v", err)
+	}
+
+	// Seed reactions
+	if err := seedReactions(db, reactionRepo, reportRepo, commentRepo, userRepo); err != nil {
+		log.Fatalf("Failed to seed reactions: %v", err)
+	}
+
+	// Seed route changes
+	if err := seedRouteChanges(db, routeChangeRepo, routeRepo, userRepo, stopRepo); err != nil {
+		log.Fatalf("Failed to seed route changes: %v", err)
+	}
+
+	// Seed user badges
+	if err := seedUserBadges(db, userBadgeRepo, badgeRepo, userRepo); err != nil {
+		log.Fatalf("Failed to seed user badges: %v", err)
 	}
 
 	fmt.Println("✅ Database seeding completed successfully!")
@@ -260,6 +310,674 @@ func seedBadges(badgeRepo repository.BadgeRepository) error {
 		fmt.Printf("  ✓ Created badge: %s\n", badge.Name)
 	}
 
+	return nil
+}
+
+func seedUsers(userRepo repository.UserRepository) error {
+	// Initialize random generator
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// Indonesian first names
+	firstNames := []string{
+		"Ahmad", "Budi", "Cahya", "Dedi", "Eko", "Fajar", "Gunawan", "Hadi", "Indra", "Joko",
+		"Kurniawan", "Lukman", "Mulyadi", "Nugroho", "Oki", "Prasetyo", "Rahmat", "Sari", "Taufik", "Udin",
+		"Wahyu", "Yanto", "Zainal", "Ayu", "Bunga", "Citra", "Dewi", "Eka", "Fitri", "Gita",
+		"Hani", "Indah", "Jihan", "Kartika", "Lestari", "Maya", "Nina", "Oktavia", "Putri", "Rina",
+		"Sinta", "Tika", "Umi", "Vina", "Wati", "Yuli", "Zahra", "Ade", "Bayu", "Candra",
+	}
+
+	// Indonesian last names
+	lastNames := []string{
+		"Santoso", "Wijaya", "Kurniawan", "Prasetyo", "Sari", "Lestari", "Nugroho", "Rahman", "Hidayat", "Saputra",
+		"Setiawan", "Gunawan", "Siregar", "Siregar", "Hutapea", "Simanjuntak", "Nainggolan", "Sihombing", "Manurung", "Situmorang",
+		"Purba", "Saragih", "Sinaga", "Lumban", "Tambunan", "Pangaribuan", "Samosir", "Pardede", "Sianturi", "Lubis",
+		"Nasution", "Harahap", "Ritonga", "Dalimunthe", "Hasibuan", "Tanjung", "Pohan", "Siregar", "Lubis", "Nasution",
+		"Wijaya", "Kusuma", "Dewi", "Sari", "Lestari", "Nugroho", "Rahman", "Hidayat", "Saputra", "Setiawan",
+	}
+
+	// Domains for emails
+	domains := []string{
+		"gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "mail.com",
+		"ymail.com", "rocketmail.com", "live.com", "msn.com", "icloud.com",
+	}
+
+	fmt.Println("Seeding users...")
+	
+	// Create 50 users (middle of 20-100 range)
+	numUsers := 50
+	createdCount := 0
+	skippedCount := 0
+
+	for i := 0; i < numUsers; i++ {
+		firstName := firstNames[rng.Intn(len(firstNames))]
+		lastName := lastNames[rng.Intn(len(lastNames))]
+		username := strings.ToLower(firstName + lastName + fmt.Sprintf("%d", rng.Intn(9999)))
+		email := strings.ToLower(firstName + "." + lastName + fmt.Sprintf("%d", rng.Intn(9999)) + "@" + domains[rng.Intn(len(domains))])
+		
+		// Check if user already exists
+		_, err := userRepo.FindByEmail(email)
+		if err == nil {
+			skippedCount++
+			continue
+		}
+
+		// Hash password
+		hashedPassword, err := utils.HashPassword("password123") // Default password for all seeded users
+		if err != nil {
+			fmt.Printf("  ⚠ Warning: Failed to hash password for user %s: %v\n", username, err)
+			continue
+		}
+
+		// Random reputation points (0-500)
+		reputationPoints := rng.Intn(501)
+		
+		// Determine level based on reputation
+		var level string
+		switch {
+		case reputationPoints >= 500:
+			level = "expert"
+		case reputationPoints >= 200:
+			level = "trusted"
+		case reputationPoints >= 50:
+			level = "rising_star"
+		default:
+			level = "newcomer"
+		}
+
+		user := &models.User{
+			Email:           email,
+			Username:        username,
+			Password:        &hashedPassword,
+			Role:            models.RoleCommonUser,
+			ReputationPoints: reputationPoints,
+			Level:           level,
+		}
+
+		if err := userRepo.Create(user); err != nil {
+			// Check if it's a duplicate error
+			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "UNIQUE") {
+				skippedCount++
+				continue
+			}
+			fmt.Printf("  ⚠ Warning: Failed to create user %s: %v\n", username, err)
+			continue
+		}
+
+		createdCount++
+		if createdCount%10 == 0 {
+			fmt.Printf("  ✓ Created %d users...\n", createdCount)
+		}
+	}
+
+	fmt.Printf("  ✓ Created %d users (skipped %d duplicates)\n", createdCount, skippedCount)
+	return nil
+}
+
+func seedVehicles(db *gorm.DB, vehicleRepo repository.VehicleRepository, routeRepo repository.RouteRepository) error {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// Get all routes
+	routes, _, err := routeRepo.List(0, 1000, nil)
+	if err != nil {
+		return fmt.Errorf("failed to fetch routes: %w", err)
+	}
+	if len(routes) == 0 {
+		fmt.Println("  ⚠ No routes found, skipping vehicle seeding")
+		return nil
+	}
+
+	vehicleTypes := []string{"Bus", "Bus Rapid Transit", "Microbus", "Minibus"}
+	statuses := []models.Status{models.StatusActive, models.StatusActive, models.StatusActive, models.StatusInactive} // Mostly active
+
+	fmt.Println("Seeding vehicles...")
+	numVehicles := 50
+	createdCount := 0
+
+	for i := 0; i < numVehicles; i++ {
+		route := routes[rng.Intn(len(routes))]
+		vehicleType := vehicleTypes[rng.Intn(len(vehicleTypes))]
+		status := statuses[rng.Intn(len(statuses))]
+		
+		// Generate plate number (Jakarta format: B 1234 XYZ)
+		plateNumber := fmt.Sprintf("B %d%02d%02d %c%c%c",
+			rng.Intn(9)+1,           // First digit 1-9
+			rng.Intn(100),            // Two digits
+			rng.Intn(100),            // Two digits
+			'A'+rune(rng.Intn(26)),   // Letter
+			'A'+rune(rng.Intn(26)),   // Letter
+			'A'+rune(rng.Intn(26)),   // Letter
+		)
+
+		// Check if vehicle already exists
+		_, err := vehicleRepo.FindByVehiclePlate(plateNumber)
+		if err == nil {
+			continue
+		}
+
+		capacity := 0
+		switch vehicleType {
+		case "Bus", "Bus Rapid Transit":
+			capacity = 40 + rng.Intn(20) // 40-60
+		case "Microbus":
+			capacity = 12 + rng.Intn(4) // 12-16
+		case "Minibus":
+			capacity = 20 + rng.Intn(10) // 20-30
+		}
+
+		vehicle := &models.Vehicle{
+			VehiclePlate: plateNumber,
+			RouteID:      route.ID,
+			VehicleType:  vehicleType,
+			Capacity:     capacity,
+			Status:       status,
+		}
+
+		if err := vehicleRepo.Create(vehicle); err != nil {
+			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "UNIQUE") {
+				continue
+			}
+			fmt.Printf("  ⚠ Warning: Failed to create vehicle %s: %v\n", plateNumber, err)
+			continue
+		}
+
+		createdCount++
+		if createdCount%10 == 0 {
+			fmt.Printf("  ✓ Created %d vehicles...\n", createdCount)
+		}
+	}
+
+	fmt.Printf("  ✓ Created %d vehicles\n", createdCount)
+	return nil
+}
+
+func seedReports(db *gorm.DB, reportRepo repository.ReportRepository, userRepo repository.UserRepository, routeRepo repository.RouteRepository, stopRepo repository.StopRepository) error {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// Get all users, routes, and stops
+	users, _, err := userRepo.List(0, 1000)
+	if err != nil {
+		return fmt.Errorf("failed to fetch users: %w", err)
+	}
+	routes, _, err := routeRepo.List(0, 1000, nil)
+	if err != nil {
+		return fmt.Errorf("failed to fetch routes: %w", err)
+	}
+	stops, _, err := stopRepo.List(0, 1000, nil)
+	if err != nil {
+		return fmt.Errorf("failed to fetch stops: %w", err)
+	}
+
+	if len(users) == 0 {
+		fmt.Println("  ⚠ No users found, skipping report seeding")
+		return nil
+	}
+
+	reportTypes := []models.ReportType{
+		models.ReportTypeRouteIssue,
+		models.ReportTypeStopIssue,
+		models.ReportTypeTemporaryEvent,
+		models.ReportTypePolicyChange,
+	}
+	statuses := []models.ReportStatus{
+		models.ReportStatusPending,
+		models.ReportStatusReviewed,
+		models.ReportStatusResolved,
+	}
+
+	reportTitles := []string{
+		"Bus terlambat di halte",
+		"Halte rusak dan perlu perbaikan",
+		"Rute baru dibuka",
+		"Perubahan jadwal operasional",
+		"Fasilitas halte tidak berfungsi",
+		"Kemacetan di jalur busway",
+		"Penumpang terlalu banyak",
+		"AC bus tidak berfungsi",
+		"Pintu bus rusak",
+		"Kursi bus perlu diganti",
+		"Lampu halte mati",
+		"Papan informasi tidak update",
+		"Kebersihan halte kurang",
+		"Keamanan di halte perlu ditingkatkan",
+		"Jadwal tidak sesuai",
+	}
+
+	descriptions := []string{
+		"Bus sering terlambat di halte ini, mohon perbaikan jadwal",
+		"Halte ini mengalami kerusakan pada atap dan perlu segera diperbaiki",
+		"Rute baru telah dibuka untuk melayani area ini",
+		"Ada perubahan jadwal operasional mulai bulan depan",
+		"Fasilitas seperti kursi dan tempat sampah di halte tidak berfungsi dengan baik",
+		"Kemacetan sering terjadi di jalur busway ini pada jam sibuk",
+		"Penumpang terlalu banyak sehingga tidak semua bisa naik",
+		"AC di beberapa bus tidak berfungsi dengan baik",
+		"Pintu bus sering macet dan perlu perbaikan",
+		"Beberapa kursi bus sudah rusak dan perlu diganti",
+		"Lampu di halte mati pada malam hari",
+		"Papan informasi tidak ter-update dengan jadwal terbaru",
+		"Kebersihan halte perlu ditingkatkan, banyak sampah",
+		"Keamanan di halte perlu ditingkatkan, terutama pada malam hari",
+		"Jadwal yang tertera tidak sesuai dengan kenyataan",
+	}
+
+	fmt.Println("Seeding reports...")
+	numReports := 50
+	createdCount := 0
+
+	for i := 0; i < numReports; i++ {
+		user := users[rng.Intn(len(users))]
+		reportType := reportTypes[rng.Intn(len(reportTypes))]
+		status := statuses[rng.Intn(len(statuses))]
+
+		var relatedRouteID *uint
+		var relatedStopID *uint
+
+		if reportType == models.ReportTypeRouteIssue && len(routes) > 0 {
+			routeID := routes[rng.Intn(len(routes))].ID
+			relatedRouteID = &routeID
+		}
+		if reportType == models.ReportTypeStopIssue && len(stops) > 0 {
+			stopID := stops[rng.Intn(len(stops))].ID
+			relatedStopID = &stopID
+		}
+
+		title := reportTitles[rng.Intn(len(reportTitles))]
+		description := descriptions[rng.Intn(len(descriptions))]
+
+		upvotes := rng.Intn(50)
+		downvotes := rng.Intn(10)
+
+		report := &models.Report{
+			UserID:         user.ID,
+			Type:           reportType,
+			Title:          title,
+			Description:    description,
+			RelatedRouteID: relatedRouteID,
+			RelatedStopID:  relatedStopID,
+			Status:         status,
+			Upvotes:        upvotes,
+			Downvotes:      downvotes,
+			CommentCount:   0, // Will be updated when comments are created
+		}
+
+		if err := reportRepo.Create(report); err != nil {
+			fmt.Printf("  ⚠ Warning: Failed to create report: %v\n", err)
+			continue
+		}
+
+		createdCount++
+		if createdCount%10 == 0 {
+			fmt.Printf("  ✓ Created %d reports...\n", createdCount)
+		}
+	}
+
+	fmt.Printf("  ✓ Created %d reports\n", createdCount)
+	return nil
+}
+
+func seedComments(db *gorm.DB, commentRepo repository.CommentRepository, reportRepo repository.ReportRepository, userRepo repository.UserRepository) error {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// Get all users and reports
+	users, _, err := userRepo.List(0, 1000)
+	if err != nil {
+		return fmt.Errorf("failed to fetch users: %w", err)
+	}
+	reports, _, err := reportRepo.List(0, 1000, nil)
+	if err != nil {
+		return fmt.Errorf("failed to fetch reports: %w", err)
+	}
+
+	if len(reports) == 0 {
+		fmt.Println("  ⚠ No reports found, skipping comment seeding")
+		return nil
+	}
+
+	commentTexts := []string{
+		"Setuju, halte ini memang perlu diperbaiki",
+		"Terima kasih atas laporannya",
+		"Saya juga mengalami hal yang sama",
+		"Semoga segera ditindaklanjuti",
+		"Informasi yang sangat membantu",
+		"Bagus, halte ini memang perlu perhatian",
+		"Saya setuju dengan laporan ini",
+		"Terima kasih sudah melaporkan",
+		"Semoga bisa segera diperbaiki",
+		"Laporan yang sangat detail",
+		"Saya juga melihat masalah yang sama",
+		"Terima kasih atas informasinya",
+		"Semoga pihak terkait segera menindaklanjuti",
+		"Laporan yang sangat membantu",
+		"Setuju dengan pendapat ini",
+	}
+
+	fmt.Println("Seeding comments...")
+	numComments := 50
+	createdCount := 0
+
+	// Track comments for replies
+	var topLevelComments []*models.Comment
+
+	for i := 0; i < numComments; i++ {
+		report := reports[rng.Intn(len(reports))]
+		user := users[rng.Intn(len(users))]
+		content := commentTexts[rng.Intn(len(commentTexts))]
+
+		var parentID *uint
+		// 30% chance of being a reply
+		if len(topLevelComments) > 0 && rng.Float32() < 0.3 {
+			parent := topLevelComments[rng.Intn(len(topLevelComments))]
+			parentID = &parent.ID
+		}
+
+		upvotes := rng.Intn(20)
+		downvotes := rng.Intn(5)
+
+		comment := &models.Comment{
+			ReportID:  report.ID,
+			UserID:    user.ID,
+			ParentID:  parentID,
+			Content:   content,
+			Upvotes:   upvotes,
+			Downvotes: downvotes,
+		}
+
+		if err := commentRepo.Create(comment); err != nil {
+			fmt.Printf("  ⚠ Warning: Failed to create comment: %v\n", err)
+			continue
+		}
+
+		// Track top-level comments for potential replies
+		if parentID == nil {
+			topLevelComments = append(topLevelComments, comment)
+		}
+
+		// Update report comment count
+		db.Model(&models.Report{}).Where("id = ?", report.ID).UpdateColumn("comment_count", gorm.Expr("comment_count + 1"))
+
+		createdCount++
+		if createdCount%10 == 0 {
+			fmt.Printf("  ✓ Created %d comments...\n", createdCount)
+		}
+	}
+
+	fmt.Printf("  ✓ Created %d comments\n", createdCount)
+	return nil
+}
+
+func seedReactions(db *gorm.DB, reactionRepo repository.ReactionRepository, reportRepo repository.ReportRepository, commentRepo repository.CommentRepository, userRepo repository.UserRepository) error {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// Get all users, reports, and comments
+	users, _, err := userRepo.List(0, 1000)
+	if err != nil {
+		return fmt.Errorf("failed to fetch users: %w", err)
+	}
+	reports, _, err := reportRepo.List(0, 1000, nil)
+	if err != nil {
+		return fmt.Errorf("failed to fetch reports: %w", err)
+	}
+
+	// Get comments
+	var comments []models.Comment
+	if err := db.Find(&comments).Error; err != nil {
+		return fmt.Errorf("failed to fetch comments: %w", err)
+	}
+
+	if len(users) == 0 {
+		fmt.Println("  ⚠ No users found, skipping reaction seeding")
+		return nil
+	}
+
+	reactionTypes := []models.ReactionType{
+		models.ReactionUpvote,
+		models.ReactionDownvote,
+	}
+
+	fmt.Println("Seeding reactions...")
+	numReactions := 50
+	createdCount := 0
+
+	// Track reactions to avoid duplicates
+	reactionMap := make(map[string]bool)
+
+	for i := 0; i < numReactions; i++ {
+		user := users[rng.Intn(len(users))]
+		reactionType := reactionTypes[rng.Intn(len(reactionTypes))]
+		// 70% upvotes, 30% downvotes
+		if rng.Float32() < 0.7 {
+			reactionType = models.ReactionUpvote
+		} else {
+			reactionType = models.ReactionDownvote
+		}
+
+		var targetType models.ReactionTargetType
+		var targetID uint
+
+		// 60% on reports, 40% on comments
+		if len(comments) > 0 && rng.Float32() < 0.4 {
+			targetType = models.ReactionTargetComment
+			targetID = comments[rng.Intn(len(comments))].ID
+		} else if len(reports) > 0 {
+			targetType = models.ReactionTargetReport
+			targetID = reports[rng.Intn(len(reports))].ID
+		} else {
+			continue
+		}
+
+		// Check for duplicate
+		key := fmt.Sprintf("%d-%s-%d", user.ID, targetType, targetID)
+		if reactionMap[key] {
+			continue
+		}
+		reactionMap[key] = true
+
+		// Check if reaction already exists
+		_, err := reactionRepo.FindByUserAndTarget(user.ID, targetType, targetID)
+		if err == nil {
+			continue
+		}
+
+		reaction := &models.Reaction{
+			UserID:       user.ID,
+			TargetType:   targetType,
+			TargetID:     targetID,
+			ReactionType: reactionType,
+		}
+
+		if err := reactionRepo.Create(reaction); err != nil {
+			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "UNIQUE") {
+				continue
+			}
+			fmt.Printf("  ⚠ Warning: Failed to create reaction: %v\n", err)
+			continue
+		}
+
+		// Update upvotes/downvotes on target
+		if targetType == models.ReactionTargetReport {
+			if reactionType == models.ReactionUpvote {
+				db.Model(&models.Report{}).Where("id = ?", targetID).UpdateColumn("upvotes", gorm.Expr("upvotes + 1"))
+			} else {
+				db.Model(&models.Report{}).Where("id = ?", targetID).UpdateColumn("downvotes", gorm.Expr("downvotes + 1"))
+			}
+		} else {
+			if reactionType == models.ReactionUpvote {
+				db.Model(&models.Comment{}).Where("id = ?", targetID).UpdateColumn("upvotes", gorm.Expr("upvotes + 1"))
+			} else {
+				db.Model(&models.Comment{}).Where("id = ?", targetID).UpdateColumn("downvotes", gorm.Expr("downvotes + 1"))
+			}
+		}
+
+		createdCount++
+		if createdCount%10 == 0 {
+			fmt.Printf("  ✓ Created %d reactions...\n", createdCount)
+		}
+	}
+
+	fmt.Printf("  ✓ Created %d reactions\n", createdCount)
+	return nil
+}
+
+func seedRouteChanges(db *gorm.DB, routeChangeRepo repository.RouteChangeRepository, routeRepo repository.RouteRepository, userRepo repository.UserRepository, stopRepo repository.StopRepository) error {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// Get all routes, users, and stops
+	routes, _, err := routeRepo.List(0, 1000, nil)
+	if err != nil {
+		return fmt.Errorf("failed to fetch routes: %w", err)
+	}
+	users, _, err := userRepo.List(0, 1000)
+	if err != nil {
+		return fmt.Errorf("failed to fetch users: %w", err)
+	}
+	stops, _, err := stopRepo.List(0, 1000, nil)
+	if err != nil {
+		return fmt.Errorf("failed to fetch stops: %w", err)
+	}
+
+	if len(routes) == 0 || len(users) == 0 {
+		fmt.Println("  ⚠ No routes or users found, skipping route change seeding")
+		return nil
+	}
+
+	changeTypes := []models.ChangeType{
+		models.ChangeTypeRouteCreated,
+		models.ChangeTypeRouteUpdated,
+		models.ChangeTypeStopAdded,
+		models.ChangeTypeStopRemoved,
+		models.ChangeTypeStopOrderChanged,
+		models.ChangeTypeStopUpdated,
+	}
+
+	reasons := []string{
+		"Penyesuaian rute berdasarkan kebutuhan penumpang",
+		"Perbaikan infrastruktur halte",
+		"Optimasi waktu tempuh",
+		"Penambahan halte baru",
+		"Perubahan jadwal operasional",
+		"Peningkatan layanan",
+		"Penyesuaian dengan perkembangan kota",
+		"Perbaikan aksesibilitas",
+	}
+
+	fmt.Println("Seeding route changes...")
+	numChanges := 30
+	createdCount := 0
+
+	for i := 0; i < numChanges; i++ {
+		route := routes[rng.Intn(len(routes))]
+		user := users[rng.Intn(len(users))]
+		changeType := changeTypes[rng.Intn(len(changeTypes))]
+		reason := reasons[rng.Intn(len(reasons))]
+
+		var affectedStopID *uint
+		if (changeType == models.ChangeTypeStopAdded || changeType == models.ChangeTypeStopRemoved || changeType == models.ChangeTypeStopUpdated) && len(stops) > 0 {
+			stopID := stops[rng.Intn(len(stops))].ID
+			affectedStopID = &stopID
+		}
+
+		routeChange := &models.RouteChange{
+			RouteID:        route.ID,
+			ChangedBy:      user.ID,
+			ChangeType:     changeType,
+			AffectedStopID: affectedStopID,
+			Reason:         reason,
+		}
+
+		if err := routeChangeRepo.Create(routeChange); err != nil {
+			fmt.Printf("  ⚠ Warning: Failed to create route change: %v\n", err)
+			continue
+		}
+
+		createdCount++
+		if createdCount%10 == 0 {
+			fmt.Printf("  ✓ Created %d route changes...\n", createdCount)
+		}
+	}
+
+	fmt.Printf("  ✓ Created %d route changes\n", createdCount)
+	return nil
+}
+
+func seedUserBadges(db *gorm.DB, userBadgeRepo repository.UserBadgeRepository, badgeRepo repository.BadgeRepository, userRepo repository.UserRepository) error {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// Get all users and badges
+	users, _, err := userRepo.List(0, 1000)
+	if err != nil {
+		return fmt.Errorf("failed to fetch users: %w", err)
+	}
+	badges, err := badgeRepo.FindAll()
+	if err != nil {
+		return fmt.Errorf("failed to fetch badges: %w", err)
+	}
+
+	if len(users) == 0 || len(badges) == 0 {
+		fmt.Println("  ⚠ No users or badges found, skipping user badge seeding")
+		return nil
+	}
+
+	fmt.Println("Seeding user badges...")
+	createdCount := 0
+
+	// Assign badges to users based on their reputation and activity
+	for _, user := range users {
+		// Check which badges user should have based on reputation
+		for _, badge := range badges {
+			shouldHave := false
+
+			switch badge.CriteriaType {
+			case models.BadgeCriteriaReputationPoints:
+				if user.ReputationPoints >= badge.CriteriaValue {
+					shouldHave = true
+				}
+			case models.BadgeCriteriaReportsAccepted:
+				// Simulate: users with higher reputation likely have more accepted reports
+				if user.ReputationPoints >= badge.CriteriaValue*10 {
+					shouldHave = true
+				}
+			case models.BadgeCriteriaCommentsMade:
+				// Simulate: users with higher reputation likely have more comments
+				if user.ReputationPoints >= badge.CriteriaValue*2 {
+					shouldHave = true
+				}
+			case models.BadgeCriteriaUpvotesReceived:
+				// Simulate: users with higher reputation likely have more upvotes
+				if user.ReputationPoints >= badge.CriteriaValue*2 {
+					shouldHave = true
+				}
+			}
+
+			if shouldHave {
+				// Check if user already has this badge
+				_, err := userBadgeRepo.FindByUserAndBadge(user.ID, badge.ID)
+				if err == nil {
+					continue
+				}
+
+				// Random earned time (within last 6 months)
+				earnedAt := time.Now().Add(-time.Duration(rng.Intn(180)) * 24 * time.Hour)
+
+				userBadge := &models.UserBadge{
+					UserID:   user.ID,
+					BadgeID:  badge.ID,
+					EarnedAt: earnedAt,
+				}
+
+				if err := userBadgeRepo.Create(userBadge); err != nil {
+					if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "UNIQUE") {
+						continue
+					}
+					fmt.Printf("  ⚠ Warning: Failed to create user badge: %v\n", err)
+					continue
+				}
+
+				createdCount++
+			}
+		}
+	}
+
+	fmt.Printf("  ✓ Created %d user badges\n", createdCount)
 	return nil
 }
 
@@ -758,6 +1476,102 @@ func seedData(
 			name:        "Pasar Senen - Jakarta Int'l Stadium",
 			description: "Koridor 14: Pasar Senen ke Jakarta International Stadium",
 			stopNames:   []string{"Pasar Senen", "Jakarta Int'l Stadium"},
+		},
+		{
+			routeNumber: "15",
+			name:        "Lebak Bulus - Harmoni",
+			description: "Koridor 15: Lebak Bulus ke Harmoni",
+			stopNames:   []string{"Lebak Bulus", "Fatmawati", "Cipete Raya", "Haji Nawi", "Blok A", "Blok M", "ASEAN", "Senopati", "Sudirman", "Thamrin", "Harmoni"},
+		},
+		{
+			routeNumber: "16",
+			name:        "Harmoni - Ragunan",
+			description: "Koridor 16: Harmoni ke Ragunan",
+			stopNames:   []string{"Harmoni", "Thamrin", "Sudirman", "Senopati", "ASEAN", "Blok M", "Blok A", "Haji Nawi", "Cipete Raya", "Fatmawati", "Lebak Bulus", "Ragunan"},
+		},
+		{
+			routeNumber: "17",
+			name:        "Pulo Gadung - Cawang",
+			description: "Koridor 17: Pulo Gadung ke Cawang",
+			stopNames:   []string{"Pulo Gadung", "Rawamangun", "Pulomas", "Kayu Putih", "Pramuka BPKP", "Matraman", "Bidara Cina", "Stasiun Jatinegara", "Cawang UKI", "Cawang"},
+		},
+		{
+			routeNumber: "18",
+			name:        "Kampung Rambutan - Cikoko",
+			description: "Koridor 18: Kampung Rambutan ke Cikoko",
+			stopNames:   []string{"Kampung Rambutan", "Pasar Rebo", "Cililitan", "Bidara Cina", "Stasiun Jatinegara", "Cawang UKI", "Cikoko"},
+		},
+		{
+			routeNumber: "19",
+			name:        "Kota - Tanjung Priok",
+			description: "Koridor 19: Kota ke Tanjung Priok",
+			stopNames:   []string{"Kota", "Stasiun Kota", "Jembatan Merah", "Mangga Dua", "Gunung Sahari", "Kemayoran", "Pademangan", "Ancol", "Yos Sudarso", "Sunter", "Tanjung Priok"},
+		},
+		{
+			routeNumber: "20",
+			name:        "Pluit - Kalideres",
+			description: "Koridor 20: Pluit ke Kalideres",
+			stopNames:   []string{"Pluit", "Muara Karang", "Penjaringan", "Stasiun Kota", "Jembatan Merah", "Mangga Besar", "Olahraga", "Kota", "Kalideres"},
+		},
+		{
+			routeNumber: "21",
+			name:        "Blok M - Pasar Minggu",
+			description: "Koridor 21: Blok M ke Pasar Minggu",
+			stopNames:   []string{"Blok M", "Blok A", "Haji Nawi", "Cipete Raya", "Fatmawati", "Lebak Bulus", "Ragunan", "Pasar Minggu"},
+		},
+		{
+			routeNumber: "22",
+			name:        "PGC - Cakung",
+			description: "Koridor 22: PGC ke Cakung",
+			stopNames:   []string{"PGC", "Cakung", "Rawamangun", "Pulomas", "Kayu Putih"},
+		},
+		{
+			routeNumber: "23",
+			name:        "Tanjung Priok - Ancol",
+			description: "Koridor 23: Tanjung Priok ke Ancol",
+			stopNames:   []string{"Tanjung Priok", "Yos Sudarso", "Sunter", "Ancol"},
+		},
+		{
+			routeNumber: "24",
+			name:        "Kampung Melayu - Cililitan",
+			description: "Koridor 24: Kampung Melayu ke Cililitan",
+			stopNames:   []string{"Kampung Melayu", "Stasiun Jatinegara", "Bidara Cina", "Cililitan"},
+		},
+		{
+			routeNumber: "25",
+			name:        "Monumen Nasional - Harmoni",
+			description: "Koridor 25: Monumen Nasional ke Harmoni",
+			stopNames:   []string{"Monumen Nasional", "Harmoni", "Gajah Mada", "Hayam Wuruk"},
+		},
+		{
+			routeNumber: "26",
+			name:        "Pulo Gebang - Cakung",
+			description: "Koridor 26: Pulo Gebang ke Cakung",
+			stopNames:   []string{"Pulo Gebang", "Cakung", "Rawamangun", "Pulomas"},
+		},
+		{
+			routeNumber: "27",
+			name:        "Ciledug - Kebon Jeruk",
+			description: "Koridor 27: Ciledug ke Kebon Jeruk",
+			stopNames:   []string{"Ciledug", "Kebon Jeruk", "Tomang", "Grogol"},
+		},
+		{
+			routeNumber: "28",
+			name:        "Ragunan - Fatmawati",
+			description: "Koridor 28: Ragunan ke Fatmawati",
+			stopNames:   []string{"Ragunan", "Lebak Bulus", "Fatmawati"},
+		},
+		{
+			routeNumber: "29",
+			name:        "Pinang Ranti - Kampung Rambutan",
+			description: "Koridor 29: Pinang Ranti ke Kampung Rambutan",
+			stopNames:   []string{"Pinang Ranti", "Cililitan", "Pasar Rebo", "Kampung Rambutan"},
+		},
+		{
+			routeNumber: "30",
+			name:        "Harmoni - Senayan",
+			description: "Koridor 30: Harmoni ke Senayan",
+			stopNames:   []string{"Harmoni", "Thamrin", "Sudirman", "Senayan"},
 		},
 	}
 

@@ -70,6 +70,10 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.Report{},
 		&models.RouteChange{},
 		&models.BulkUploadLog{},
+		&models.Comment{},
+		&models.Reaction{},
+		&models.Badge{},
+		&models.UserBadge{},
 	); err != nil {
 		return err
 	}

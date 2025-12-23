@@ -142,13 +142,22 @@ func main() {
 	logger.Info("Database connected successfully")
 
 	// Run migrations conditionally
-	if cfg.Database.RunMigrations {
+	// In development, always run migrations unless explicitly disabled
+	shouldRunMigrations := cfg.Database.RunMigrations
+	if cfg.Server.Environment == "development" && !shouldRunMigrations {
+		logger.Info("Development mode: enabling migrations (override DB_RUN_MIGRATIONS=false)")
+		shouldRunMigrations = true
+	}
+
+	if shouldRunMigrations {
+		logger.Info("Running database migrations...")
 		if err := utils.AutoMigrate(db); err != nil {
 			logger.Fatal("Failed to run migrations", zap.Error(err))
 		}
-		logger.Info("Database migrations completed")
+		logger.Info("✓ Database migrations completed successfully")
 	} else {
-		logger.Info("Skipping database migrations (DB_RUN_MIGRATIONS=false)")
+		logger.Warn("⚠ Skipping database migrations (DB_RUN_MIGRATIONS=false)")
+		logger.Warn("⚠ If tables are missing, set DB_RUN_MIGRATIONS=true in your .env file")
 	}
 
 	// Ensure system user exists for guest reports

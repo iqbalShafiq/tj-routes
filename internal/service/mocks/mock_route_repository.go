@@ -45,3 +45,11 @@ func (m *MockRouteRepository) List(offset, limit int, filters map[string]interfa
 	return args.Get(0).([]models.Route), args.Get(1).(int64), args.Error(2)
 }
 
+func (m *MockRouteRepository) FindByRouteNumber(routeNumber string) (*models.Route, error) {
+	args := m.Called(routeNumber)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Route), args.Error(1)
+}
+

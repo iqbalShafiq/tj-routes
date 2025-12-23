@@ -16,6 +16,7 @@ type Config struct {
 	Redis       RedisConfig
 	Cache       CacheConfig
 	FileStorage FileStorageConfig
+	JobQueue    JobQueueConfig
 }
 
 type ServerConfig struct {
@@ -101,6 +102,18 @@ type FileStorageConfig struct {
 	CloudSecretKey   string   // Cloud storage secret key (optional)
 }
 
+type JobQueueConfig struct {
+	// Uses same Redis connection as Cache
+	// Job timeout in minutes (default: 5)
+	JobTimeoutMinutes int
+	// Stuck job threshold in minutes (default: 10)
+	StuckJobThresholdMinutes int
+	// Max retry attempts (default: 3)
+	MaxRetryAttempts int
+	// Concurrency - number of workers (default: 5)
+	Concurrency int
+}
+
 func Load() (*Config, error) {
 	config := &Config{
 		Server: ServerConfig{
@@ -163,6 +176,12 @@ func Load() (*Config, error) {
 			CloudRegion:      getEnv("FILE_CLOUD_REGION", ""),
 			CloudAccessKey:   getEnv("FILE_CLOUD_ACCESS_KEY", ""),
 			CloudSecretKey:   getEnv("FILE_CLOUD_SECRET_KEY", ""),
+		},
+		JobQueue: JobQueueConfig{
+			JobTimeoutMinutes:        getEnvAsInt("JOB_QUEUE_TIMEOUT_MINUTES", 5),
+			StuckJobThresholdMinutes: getEnvAsInt("JOB_QUEUE_STUCK_THRESHOLD_MINUTES", 10),
+			MaxRetryAttempts:         getEnvAsInt("JOB_QUEUE_MAX_RETRY", 3),
+			Concurrency:              getEnvAsInt("JOB_QUEUE_CONCURRENCY", 5),
 		},
 	}
 

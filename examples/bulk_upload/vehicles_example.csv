@@ -1,0 +1,7 @@
+vehicle_plate,route_id,vehicle_type,capacity,status
+ABC-1234,1,Bus,50,active
+XYZ-5678,1,Bus,45,active
+DEF-9012,2,Minibus,25,active
+GHI-3456,2,Bus,50,active
+JKL-7890,3,Bus,40,active
+

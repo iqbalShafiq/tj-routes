@@ -1,0 +1,7 @@
+name,type,latitude,longitude,address,city,district,facilities,status
+Central Station,terminal,40.7128,-74.0060,123 Main St,New York,Manhattan,"{""wifi"":true,""restroom"":true}",active
+Park Avenue Stop,stop,40.7580,-73.9855,456 Park Ave,New York,Manhattan,"{""shelter"":true}",active
+University Stop,stop,40.7505,-73.9934,789 College Blvd,New York,Brooklyn,"{""wifi"":true,""bench"":true}",active
+Airport Terminal,terminal,40.6413,-73.7781,100 Airport Rd,New York,Queens,"{""wifi"":true,""restroom"":true,""parking"":true}",active
+Downtown Plaza,stop,40.7140,-74.0060,321 Market St,New York,Manhattan,"{""shelter"":true,""bench"":true}",active
+

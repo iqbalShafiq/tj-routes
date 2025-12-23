@@ -172,15 +172,9 @@ func main() {
 	vehicleRepo := repository.NewVehicleRepository(db)
 	reportRepo := repository.NewReportRepository(db)
 	routeChangeRepo := repository.NewRouteChangeRepository(db)
+	bulkUploadLogRepo := repository.NewBulkUploadLogRepository(db)
 
-	// Initialize services with cache
-	userService := service.NewUserService(userRepo, cfg, cacheInstance)
-	stopService := service.NewStopService(stopRepo, cacheInstance, cfg)
-	routeService := service.NewRouteService(routeRepo, routeStopRepo, stopRepo, routeChangeRepo, cacheInstance, cfg)
-	vehicleService := service.NewVehicleService(vehicleRepo, routeRepo, cacheInstance, cfg)
-	reportService := service.NewReportService(reportRepo, routeRepo, stopRepo)
-
-	// Initialize file storage
+	// Initialize file storage (needed for bulk upload service and handlers)
 	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.Host, cfg.Server.Port)
 	if cfg.Server.Environment == "production" {
 		// In production, use actual domain from config if available
@@ -192,6 +186,79 @@ func main() {
 	fileStorage := utils.NewFileStorage(&cfg.FileStorage, baseURL)
 	logger.Info("File storage initialized", zap.String("type", cfg.FileStorage.StorageType), zap.String("path", cfg.FileStorage.UploadPath))
 
+	// Initialize job queue client (always try, even if cache failed)
+	// This allows bulk upload to work even if cache is disabled
+	var jobQueueClient *utils.JobQueueClient
+	jobQueueClient, err = utils.InitJobQueueClient(cfg)
+	if err != nil {
+		logger.Warn("Failed to initialize job queue client, continuing without background jobs", zap.Error(err))
+		jobQueueClient = nil
+	} else {
+		logger.Info("Job queue client initialized successfully")
+	}
+
+	// Initialize services with cache
+	userService := service.NewUserService(userRepo, cfg, cacheInstance)
+	stopService := service.NewStopService(stopRepo, cacheInstance, cfg)
+	routeService := service.NewRouteService(routeRepo, routeStopRepo, stopRepo, routeChangeRepo, cacheInstance, cfg)
+	vehicleService := service.NewVehicleService(vehicleRepo, routeRepo, cacheInstance, cfg)
+	reportService := service.NewReportService(reportRepo, routeRepo, stopRepo)
+
+	// Initialize bulk upload service
+	var bulkUploadService service.BulkUploadService
+	if jobQueueClient != nil {
+		bulkUploadService = service.NewBulkUploadService(
+			bulkUploadLogRepo,
+			fileStorage,
+			jobQueueClient,
+			cfg,
+			logger,
+		)
+	}
+
+	// Initialize job queue server and processor
+	var jobQueueServer *utils.JobQueueServer
+	var bulkUploadProcessor *service.BulkUploadProcessor
+	if jobQueueClient != nil {
+		jobQueueServer, err = utils.InitJobQueueServer(cfg, logger)
+		if err != nil {
+			logger.Warn("Failed to initialize job queue server, continuing without background jobs", zap.Error(err))
+			jobQueueServer = nil
+		} else {
+			logger.Info("Job queue server initialized successfully")
+			// Initialize bulk upload processor
+			bulkUploadProcessor = service.NewBulkUploadProcessor(
+				bulkUploadLogRepo,
+				routeRepo,
+				stopRepo,
+				vehicleRepo,
+				cacheInstance,
+				cfg,
+				logger,
+			)
+
+			// Register bulk upload handler
+			jobQueueServer.RegisterBulkUploadHandler(bulkUploadProcessor.ProcessBulkUpload)
+
+			// Start job queue server in background
+			go func() {
+				logger.Info("Starting job queue server")
+				if err := jobQueueServer.Start(); err != nil {
+					logger.Fatal("Job queue server failed", zap.Error(err))
+				}
+			}()
+
+			// Recover stuck jobs on startup
+			if bulkUploadService != nil {
+				if err := bulkUploadService.RecoverStuckJobs(); err != nil {
+					logger.Warn("Failed to recover stuck jobs", zap.Error(err))
+				} else {
+					logger.Info("Job recovery completed")
+				}
+			}
+		}
+	}
+
 	// Initialize handlers
 	authHandler := handler.NewAuthHandler(userService, cfg)
 	stopHandler := handler.NewStopHandler(stopService, fileStorage)
@@ -200,6 +267,24 @@ func main() {
 	reportHandler := handler.NewReportHandler(reportService, userService, fileStorage, reportRepo)
 	userHandler := handler.NewUserHandler(userService)
 	docsHandler := handler.NewDocsHandler()
+
+	// Initialize bulk upload handler (always create, even if service is nil)
+	// This ensures routes are registered, but will return error if service unavailable
+	var bulkUploadHandler *handler.BulkUploadHandler
+	if bulkUploadService != nil {
+		bulkUploadHandler = handler.NewBulkUploadHandler(bulkUploadService)
+		logger.Info("Bulk upload handler initialized successfully")
+	} else {
+		logger.Warn("Bulk upload service not available - routes will return service unavailable")
+		// Create handler with nil service - it will handle the error gracefully
+		bulkUploadHandler = handler.NewBulkUploadHandler(nil)
+	}
+
+	// Defensive check - ensure handler is never nil
+	if bulkUploadHandler == nil {
+		logger.Error("CRITICAL: Bulk upload handler is nil - creating fallback handler")
+		bulkUploadHandler = handler.NewBulkUploadHandler(nil)
+	}
 
 	// Setup router
 	if cfg.Server.Environment == "production" {
@@ -401,6 +486,16 @@ func main() {
 				users.GET("/:id", userHandler.GetUser)
 				users.PUT("/:id/role", userHandler.UpdateUserRole)
 			}
+
+			// Bulk upload (admin only)
+			// Always register routes, handler will return service unavailable if not initialized
+			bulkUpload := protected.Group("/bulk-upload")
+			bulkUpload.Use(middleware.RequireAdmin())
+			{
+				bulkUpload.POST("/:entityType", bulkUploadHandler.UploadCSV)
+				bulkUpload.GET("/:id", bulkUploadHandler.GetUploadStatus)
+				bulkUpload.GET("", bulkUploadHandler.ListUploads)
+			}
 		}
 	}
 
@@ -432,6 +527,12 @@ func main() {
 	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
+
+	// Shutdown job queue server
+	if jobQueueServer != nil {
+		logger.Info("Shutting down job queue server...")
+		jobQueueServer.Shutdown()
+	}
 
 	if err := srv.Shutdown(ctx); err != nil {
 		logger.Fatal("Server forced to shutdown", zap.Error(err))

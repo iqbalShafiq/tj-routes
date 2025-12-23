@@ -9,6 +9,7 @@ import (
 type RouteRepository interface {
 	Create(route *models.Route) error
 	FindByID(id uint) (*models.Route, error)
+	FindByRouteNumber(routeNumber string) (*models.Route, error)
 	Update(route *models.Route) error
 	Delete(id uint) error
 	List(offset, limit int, filters map[string]interface{}) ([]models.Route, int64, error)
@@ -29,6 +30,15 @@ func (r *routeRepository) Create(route *models.Route) error {
 func (r *routeRepository) FindByID(id uint) (*models.Route, error) {
 	var route models.Route
 	err := r.db.Preload("RouteStops.Stop").First(&route, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &route, nil
+}
+
+func (r *routeRepository) FindByRouteNumber(routeNumber string) (*models.Route, error) {
+	var route models.Route
+	err := r.db.Where("LOWER(route_number) = LOWER(?)", routeNumber).First(&route).Error
 	if err != nil {
 		return nil, err
 	}

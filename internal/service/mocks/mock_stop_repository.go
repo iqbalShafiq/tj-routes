@@ -45,3 +45,11 @@ func (m *MockStopRepository) List(offset, limit int, filters map[string]interfac
 	return args.Get(0).([]models.Stop), args.Get(1).(int64), args.Error(2)
 }
 
+func (m *MockStopRepository) FindByLatitudeAndLongitude(lat, lng float64) (*models.Stop, error) {
+	args := m.Called(lat, lng)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Stop), args.Error(1)
+}
+

@@ -9,6 +9,7 @@ import (
 type StopRepository interface {
 	Create(stop *models.Stop) error
 	FindByID(id uint) (*models.Stop, error)
+	FindByLatitudeAndLongitude(lat, lng float64) (*models.Stop, error)
 	Update(stop *models.Stop) error
 	Delete(id uint) error
 	List(offset, limit int, filters map[string]interface{}) ([]models.Stop, int64, error)
@@ -29,6 +30,20 @@ func (r *stopRepository) Create(stop *models.Stop) error {
 func (r *stopRepository) FindByID(id uint) (*models.Stop, error) {
 	var stop models.Stop
 	err := r.db.First(&stop, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &stop, nil
+}
+
+func (r *stopRepository) FindByLatitudeAndLongitude(lat, lng float64) (*models.Stop, error) {
+	var stop models.Stop
+	// Tolerance: 0.0001 degrees ≈ 11 meters
+	tolerance := 0.0001
+	err := r.db.Where(
+		"ABS(latitude - ?) < ? AND ABS(longitude - ?) < ?",
+		lat, tolerance, lng, tolerance,
+	).First(&stop).Error
 	if err != nil {
 		return nil, err
 	}

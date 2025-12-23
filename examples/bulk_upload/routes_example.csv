@@ -1,0 +1,7 @@
+route_number,name,description,status
+R001,City Center to Airport,Main route connecting city center to airport,active
+R002,North Station to South Terminal,Route serving north and south terminals,active
+R003,University Line,Route connecting university campus to downtown,inactive
+R004,Express Route 1,Fast route with limited stops,active
+R005,Local Route A,Local route with all stops,active
+

@@ -37,6 +37,8 @@ tags:
     description: User reports management
   - name: Users
     description: User management (Admin only)
+  - name: BulkUpload
+    description: Bulk CSV upload for routes, stops, and vehicles (Admin only)
   - name: Health
     description: Health check endpoint
 
@@ -943,6 +945,147 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/bulk-upload/{entityType}:
+    post:
+      tags:
+        - BulkUpload
+      summary: Upload CSV file for bulk import
+      description: Upload a CSV file to bulk import routes, stops, or vehicles. The file is processed asynchronously in the background. Returns immediately with upload ID and status.
+      operationId: uploadBulkCSV
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: entityType
+          in: path
+          required: true
+          description: Type of entity to import
+          schema:
+            type: string
+            enum: [route, stop, vehicle]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file to upload
+      responses:
+        "202":
+          description: Upload accepted and queued for processing
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                data:
+                  id: 1
+                  entity_type: route
+                  file_path: "./uploads/bulk_uploads/bulk_1234567890/routes.csv"
+                  status: pending
+                  total_rows: 0
+                  success_count: 0
+                  duplicate_count: 0
+                  error_count: 0
+                  user_id: 1
+                  created_at: "2024-01-01T00:00:00Z"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/bulk-upload/{id}:
+    get:
+      tags:
+        - BulkUpload
+      summary: Get bulk upload status
+      description: Get the current status and progress of a bulk upload operation
+      operationId: getBulkUploadStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Upload status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                data:
+                  id: 1
+                  entity_type: route
+                  status: processing
+                  total_rows: 100
+                  success_count: 45
+                  duplicate_count: 5
+                  error_count: 0
+                  last_processed_row: 50
+                  created_at: "2024-01-01T00:00:00Z"
+                  updated_at: "2024-01-01T00:05:00Z"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/bulk-upload:
+    get:
+      tags:
+        - BulkUpload
+      summary: List bulk uploads
+      description: List all bulk upload operations with optional filters
+      operationId: listBulkUploads
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: entity_type
+          in: query
+          schema:
+            type: string
+            enum: [route, stop, vehicle]
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, processing, completed, failed]
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of bulk uploads
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BulkUploadListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1439,6 +1582,85 @@ components:
             total:
               type: integer
               example: 50
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 10
+
+    BulkUploadLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        entity_type:
+          type: string
+          enum: [route, stop, vehicle]
+          example: route
+        file_path:
+          type: string
+          example: "./uploads/bulk_uploads/bulk_1234567890/routes.csv"
+        status:
+          type: string
+          enum: [pending, processing, completed, failed]
+          example: processing
+        total_rows:
+          type: integer
+          example: 100
+        success_count:
+          type: integer
+          example: 45
+        duplicate_count:
+          type: integer
+          example: 5
+        error_count:
+          type: integer
+          example: 0
+        error_message:
+          type: string
+          nullable: true
+          example: null
+        user_id:
+          type: integer
+          example: 1
+        last_processed_row:
+          type: integer
+          example: 50
+        last_updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:05:00Z"
+        job_id:
+          type: string
+          nullable: true
+          example: "abc123-def456-ghi789"
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:05:00Z"
+
+    BulkUploadListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            uploads:
+              type: array
+              items:
+                $ref: "#/components/schemas/BulkUploadLog"
+            total:
+              type: integer
+              example: 25
             page:
               type: integer
               example: 1

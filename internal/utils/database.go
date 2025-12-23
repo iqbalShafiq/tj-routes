@@ -68,6 +68,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.Vehicle{},
 		&models.Report{},
 		&models.RouteChange{},
+		&models.BulkUploadLog{},
 	)
 }
 

@@ -9,6 +9,7 @@ import (
 type VehicleRepository interface {
 	Create(vehicle *models.Vehicle) error
 	FindByID(id uint) (*models.Vehicle, error)
+	FindByVehiclePlate(plate string) (*models.Vehicle, error)
 	Update(vehicle *models.Vehicle) error
 	Delete(id uint) error
 	List(offset, limit int, filters map[string]interface{}) ([]models.Vehicle, int64, error)
@@ -29,6 +30,15 @@ func (r *vehicleRepository) Create(vehicle *models.Vehicle) error {
 func (r *vehicleRepository) FindByID(id uint) (*models.Vehicle, error) {
 	var vehicle models.Vehicle
 	err := r.db.Preload("Route").First(&vehicle, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &vehicle, nil
+}
+
+func (r *vehicleRepository) FindByVehiclePlate(plate string) (*models.Vehicle, error) {
+	var vehicle models.Vehicle
+	err := r.db.Where("LOWER(vehicle_plate) = LOWER(?)", plate).First(&vehicle).Error
 	if err != nil {
 		return nil, err
 	}

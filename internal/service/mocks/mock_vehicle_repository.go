@@ -45,3 +45,11 @@ func (m *MockVehicleRepository) List(offset, limit int, filters map[string]inter
 	return args.Get(0).([]models.Vehicle), args.Get(1).(int64), args.Error(2)
 }
 
+func (m *MockVehicleRepository) FindByVehiclePlate(plate string) (*models.Vehicle, error) {
+	args := m.Called(plate)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*models.Vehicle), args.Error(1)
+}
+

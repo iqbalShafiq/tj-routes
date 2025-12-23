@@ -130,13 +130,17 @@ func (s *vehicleService) ListVehicles(offset, limit int, filters map[string]inte
 	}
 	status := ""
 	routeID := uint(0)
+	search := ""
 	if s, ok := filters["status"].(models.Status); ok {
 		status = string(s)
 	}
 	if rid, ok := filters["route_id"].(uint); ok {
 		routeID = rid
 	}
-	key := cache.VehicleListKey(page, limit, status, routeID)
+	if s, ok := filters["search"].(string); ok {
+		search = s
+	}
+	key := cache.VehicleListKey(page, limit, status, routeID, search)
 
 	// Try to get from cache
 	type cachedResult struct {

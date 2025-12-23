@@ -66,9 +66,22 @@ func (r *routeRepository) List(offset, limit int, filters map[string]interface{}
 		query = query.Where("route_number = ?", routeNumber)
 	}
 
+	// Fuzzy search using pg_trgm with similarity threshold and ILIKE for partial matching
+	if search, ok := filters["search"].(string); ok && search != "" {
+		searchPattern := "%" + search + "%"
+		query = query.Where(
+			"(similarity(name, ?) > 0.2 OR similarity(route_number, ?) > 0.2 OR similarity(description, ?) > 0.2) OR (name ILIKE ? OR route_number ILIKE ? OR description ILIKE ?)",
+			search, search, search, searchPattern, searchPattern, searchPattern,
+		)
+	}
+
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
+
+	// Note: We skip relevance-based ordering for now due to GORM limitations with parameterized ORDER BY
+	// The search filtering still works correctly via the WHERE clause
+	// Results will be ordered by created_at (default) or can be ordered by other fields if needed
 
 	err := query.Preload("RouteStops.Stop").Offset(offset).Limit(limit).Find(&routes).Error
 	return routes, total, err

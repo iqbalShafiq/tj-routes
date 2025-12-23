@@ -48,6 +48,9 @@ func (h *ReportHandler) ListReports(c *gin.Context) {
 	if reportType := c.Query("type"); reportType != "" {
 		filters["type"] = models.ReportType(reportType)
 	}
+	if search := c.Query("search"); search != "" {
+		filters["search"] = search
+	}
 
 	// Non-admin users only see their own reports
 	userRole, exists := c.Get("user_role")

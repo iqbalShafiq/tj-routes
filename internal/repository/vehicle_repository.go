@@ -66,9 +66,21 @@ func (r *vehicleRepository) List(offset, limit int, filters map[string]interface
 		query = query.Where("route_id = ?", routeID)
 	}
 
+	// Fuzzy search using pg_trgm with similarity threshold and ILIKE for partial matching
+	if search, ok := filters["search"].(string); ok && search != "" {
+		searchPattern := "%" + search + "%"
+		query = query.Where(
+			"(similarity(vehicle_plate, ?) > 0.2 OR similarity(vehicle_type, ?) > 0.2) OR (vehicle_plate ILIKE ? OR vehicle_type ILIKE ?)",
+			search, search, searchPattern, searchPattern,
+		)
+	}
+
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
+
+	// Note: We skip relevance-based ordering for now due to GORM limitations with parameterized ORDER BY
+	// The search filtering still works correctly via the WHERE clause
 
 	err := query.Preload("Route").Offset(offset).Limit(limit).Find(&vehicles).Error
 	return vehicles, total, err

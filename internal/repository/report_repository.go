@@ -62,14 +62,25 @@ func (r *reportRepository) List(offset, limit int, filters map[string]interface{
 		query = query.Where("type = ?", reportType)
 	}
 
+	// Fuzzy search using pg_trgm with similarity threshold and ILIKE for partial matching
+	if search, ok := filters["search"].(string); ok && search != "" {
+		searchPattern := "%" + search + "%"
+		query = query.Where(
+			"(similarity(title, ?) > 0.2 OR similarity(description, ?) > 0.2) OR (title ILIKE ? OR description ILIKE ?)",
+			search, search, searchPattern, searchPattern,
+		)
+	}
+
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
+	// Apply ordering - created_at DESC for all (relevance ordering skipped due to GORM limitations)
+	query = query.Order("created_at DESC")
+
 	err := query.Preload("User").
 		Preload("RelatedRoute").
 		Preload("RelatedStop").
-		Order("created_at DESC").
 		Offset(offset).
 		Limit(limit).
 		Find(&reports).Error

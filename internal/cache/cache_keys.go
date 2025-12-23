@@ -13,8 +13,8 @@ func RouteKey(id uint) string {
 }
 
 // RouteListKey generates a cache key for route list with filters
-func RouteListKey(page, limit int, status, routeNumber string) string {
-	return fmt.Sprintf("route:list:%d:%d:%s:%s", page, limit, status, routeNumber)
+func RouteListKey(page, limit int, status, routeNumber, search string) string {
+	return fmt.Sprintf("route:list:%d:%d:%s:%s:%s", page, limit, status, routeNumber, search)
 }
 
 // StopKey generates a cache key for a single stop
@@ -33,8 +33,8 @@ func VehicleKey(id uint) string {
 }
 
 // VehicleListKey generates a cache key for vehicle list with filters
-func VehicleListKey(page, limit int, status string, routeID uint) string {
-	return fmt.Sprintf("vehicle:list:%d:%d:%s:%d", page, limit, status, routeID)
+func VehicleListKey(page, limit int, status string, routeID uint, search string) string {
+	return fmt.Sprintf("vehicle:list:%d:%d:%s:%d:%s", page, limit, status, routeID, search)
 }
 
 // SystemUserKey generates a cache key for system user

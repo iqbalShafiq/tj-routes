@@ -60,7 +60,8 @@ func CheckDBHealth(db *gorm.DB) error {
 }
 
 func AutoMigrate(db *gorm.DB) error {
-	return db.AutoMigrate(
+	// Run standard migrations
+	if err := db.AutoMigrate(
 		&models.User{},
 		&models.Stop{},
 		&models.Route{},
@@ -69,7 +70,50 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.Report{},
 		&models.RouteChange{},
 		&models.BulkUploadLog{},
-	)
+	); err != nil {
+		return err
+	}
+
+	// Enable pg_trgm extension for fuzzy search
+	if err := EnablePgTrgmExtension(db); err != nil {
+		return err
+	}
+
+	// Create trigram indexes for fuzzy search
+	if err := CreateTrigramIndexes(db); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// EnablePgTrgmExtension enables the pg_trgm extension for fuzzy search
+func EnablePgTrgmExtension(db *gorm.DB) error {
+	return db.Exec("CREATE EXTENSION IF NOT EXISTS pg_trgm").Error
+}
+
+// CreateTrigramIndexes creates GIN indexes on searchable columns for fuzzy search performance
+func CreateTrigramIndexes(db *gorm.DB) error {
+	indexes := []string{
+		// Routes indexes
+		"CREATE INDEX IF NOT EXISTS idx_routes_name_trgm ON routes USING GIN (name gin_trgm_ops)",
+		"CREATE INDEX IF NOT EXISTS idx_routes_route_number_trgm ON routes USING GIN (route_number gin_trgm_ops)",
+		"CREATE INDEX IF NOT EXISTS idx_routes_description_trgm ON routes USING GIN (description gin_trgm_ops)",
+		// Vehicles indexes
+		"CREATE INDEX IF NOT EXISTS idx_vehicles_plate_trgm ON vehicles USING GIN (vehicle_plate gin_trgm_ops)",
+		"CREATE INDEX IF NOT EXISTS idx_vehicles_type_trgm ON vehicles USING GIN (vehicle_type gin_trgm_ops)",
+		// Reports indexes
+		"CREATE INDEX IF NOT EXISTS idx_reports_title_trgm ON reports USING GIN (title gin_trgm_ops)",
+		"CREATE INDEX IF NOT EXISTS idx_reports_description_trgm ON reports USING GIN (description gin_trgm_ops)",
+	}
+
+	for _, idx := range indexes {
+		if err := db.Exec(idx).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // EnsureSystemUser ensures that a system user exists for guest reports

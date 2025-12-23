@@ -234,13 +234,17 @@ func (s *routeService) ListRoutes(offset, limit int, filters map[string]interfac
 	}
 	status := ""
 	routeNumber := ""
+	search := ""
 	if s, ok := filters["status"].(models.Status); ok {
 		status = string(s)
 	}
 	if rn, ok := filters["route_number"].(string); ok {
 		routeNumber = rn
 	}
-	key := cache.RouteListKey(page, limit, status, routeNumber)
+	if s, ok := filters["search"].(string); ok {
+		search = s
+	}
+	key := cache.RouteListKey(page, limit, status, routeNumber, search)
 
 	// Try to get from cache
 	type cachedResult struct {

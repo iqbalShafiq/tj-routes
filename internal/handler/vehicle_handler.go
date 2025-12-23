@@ -40,6 +40,9 @@ func (h *VehicleHandler) ListVehicles(c *gin.Context) {
 			filters["route_id"] = uint(id)
 		}
 	}
+	if search := c.Query("search"); search != "" {
+		filters["search"] = search
+	}
 
 	vehicles, total, err := h.vehicleService.ListVehicles(offset, limit, filters)
 	if err != nil {

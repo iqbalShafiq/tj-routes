@@ -44,6 +44,9 @@ func (h *RouteHandler) ListRoutes(c *gin.Context) {
 	if routeNumber := c.Query("route_number"); routeNumber != "" {
 		filters["route_number"] = routeNumber
 	}
+	if search := c.Query("search"); search != "" {
+		filters["search"] = search
+	}
 
 	routes, total, err := h.routeService.ListRoutes(offset, limit, filters)
 	if err != nil {

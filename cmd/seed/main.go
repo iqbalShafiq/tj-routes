@@ -103,6 +103,9 @@ func main() {
 	commentRepo := repository.NewCommentRepository(db)
 	reactionRepo := repository.NewReactionRepository(db)
 	routeChangeRepo := repository.NewRouteChangeRepository(db)
+	hashtagRepo := repository.NewHashtagRepository(db)
+	userFollowRepo := repository.NewUserFollowRepository(db)
+	bulkUploadLogRepo := repository.NewBulkUploadLogRepository(db)
 
 	// Seed badges first
 	if err := seedBadges(badgeRepo); err != nil {
@@ -147,6 +150,21 @@ func main() {
 	// Seed user badges
 	if err := seedUserBadges(db, userBadgeRepo, badgeRepo, userRepo); err != nil {
 		log.Fatalf("Failed to seed user badges: %v", err)
+	}
+
+	// Seed hashtags
+	if err := seedHashtags(hashtagRepo, reportRepo); err != nil {
+		log.Fatalf("Failed to seed hashtags: %v", err)
+	}
+
+	// Seed user follows
+	if err := seedUserFollows(userFollowRepo, userRepo); err != nil {
+		log.Fatalf("Failed to seed user follows: %v", err)
+	}
+
+	// Seed bulk upload logs
+	if err := seedBulkUploadLogs(bulkUploadLogRepo, userRepo); err != nil {
+		log.Fatalf("Failed to seed bulk upload logs: %v", err)
 	}
 
 	fmt.Println("✅ Database seeding completed successfully!")
@@ -342,7 +360,7 @@ func seedUsers(userRepo repository.UserRepository) error {
 	}
 
 	fmt.Println("Seeding users...")
-	
+
 	// Create 50 users (middle of 20-100 range)
 	numUsers := 50
 	createdCount := 0
@@ -353,7 +371,7 @@ func seedUsers(userRepo repository.UserRepository) error {
 		lastName := lastNames[rng.Intn(len(lastNames))]
 		username := strings.ToLower(firstName + lastName + fmt.Sprintf("%d", rng.Intn(9999)))
 		email := strings.ToLower(firstName + "." + lastName + fmt.Sprintf("%d", rng.Intn(9999)) + "@" + domains[rng.Intn(len(domains))])
-		
+
 		// Check if user already exists
 		_, err := userRepo.FindByEmail(email)
 		if err == nil {
@@ -370,7 +388,7 @@ func seedUsers(userRepo repository.UserRepository) error {
 
 		// Random reputation points (0-500)
 		reputationPoints := rng.Intn(501)
-		
+
 		// Determine level based on reputation
 		var level string
 		switch {
@@ -385,12 +403,12 @@ func seedUsers(userRepo repository.UserRepository) error {
 		}
 
 		user := &models.User{
-			Email:           email,
-			Username:        username,
-			Password:        &hashedPassword,
-			Role:            models.RoleCommonUser,
+			Email:            email,
+			Username:         username,
+			Password:         &hashedPassword,
+			Role:             models.RoleCommonUser,
 			ReputationPoints: reputationPoints,
-			Level:           level,
+			Level:            level,
 		}
 
 		if err := userRepo.Create(user); err != nil {
@@ -437,15 +455,15 @@ func seedVehicles(db *gorm.DB, vehicleRepo repository.VehicleRepository, routeRe
 		route := routes[rng.Intn(len(routes))]
 		vehicleType := vehicleTypes[rng.Intn(len(vehicleTypes))]
 		status := statuses[rng.Intn(len(statuses))]
-		
+
 		// Generate plate number (Jakarta format: B 1234 XYZ)
 		plateNumber := fmt.Sprintf("B %d%02d%02d %c%c%c",
-			rng.Intn(9)+1,           // First digit 1-9
-			rng.Intn(100),            // Two digits
-			rng.Intn(100),            // Two digits
-			'A'+rune(rng.Intn(26)),   // Letter
-			'A'+rune(rng.Intn(26)),   // Letter
-			'A'+rune(rng.Intn(26)),   // Letter
+			rng.Intn(9)+1,          // First digit 1-9
+			rng.Intn(100),          // Two digits
+			rng.Intn(100),          // Two digits
+			'A'+rune(rng.Intn(26)), // Letter
+			'A'+rune(rng.Intn(26)), // Letter
+			'A'+rune(rng.Intn(26)), // Letter
 		)
 
 		// Check if vehicle already exists
@@ -1622,5 +1640,269 @@ func seedData(
 		fmt.Printf("    ✓ Added %d stops to route %s\n", len(routeData.stopNames), routeData.routeNumber)
 	}
 
+	return nil
+}
+
+func seedHashtags(hashtagRepo repository.HashtagRepository, reportRepo repository.ReportRepository) error {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// Get all reports
+	reports, _, err := reportRepo.List(0, 1000, nil)
+	if err != nil {
+		return fmt.Errorf("failed to fetch reports: %w", err)
+	}
+
+	if len(reports) == 0 {
+		fmt.Println("  ⚠ No reports found, skipping hashtag seeding")
+		return nil
+	}
+
+	// Common hashtags related to TransJakarta
+	hashtagNames := []string{
+		"transjakarta", "busway", "jakarta", "transportasi", "publictransport",
+		"halte", "rute", "bus", "brt", "jakartautara", "jakartaselatan",
+		"jakartatimur", "jakartabarat", "jakartapusat", "kota", "blokm",
+		"pulogadung", "ragunan", "kampungmelayu", "ancol", "kalideres",
+		"perbaikan", "laporan", "masalah", "fasilitas", "jadwal",
+		"terlambat", "rusak", "perluperbaikan", "kebersihan", "keamanan",
+	}
+
+	fmt.Println("Seeding hashtags...")
+	createdCount := 0
+
+	// Create hashtags
+	for _, hashtagName := range hashtagNames {
+		hashtag, err := hashtagRepo.FindOrCreate(hashtagName)
+		if err != nil {
+			fmt.Printf("  ⚠ Warning: Failed to create/find hashtag %s: %v\n", hashtagName, err)
+			continue
+		}
+		if hashtag.ID > 0 {
+			createdCount++
+		}
+	}
+
+	fmt.Printf("  ✓ Created/found %d hashtags\n", createdCount)
+
+	// Assign hashtags to reports
+	fmt.Println("Assigning hashtags to reports...")
+	assignedCount := 0
+
+	for _, report := range reports {
+		// Assign 1-3 random hashtags to each report
+		numHashtags := 1 + rng.Intn(3)
+		usedHashtags := make(map[string]bool)
+
+		for i := 0; i < numHashtags; i++ {
+			hashtagName := hashtagNames[rng.Intn(len(hashtagNames))]
+			if usedHashtags[hashtagName] {
+				continue
+			}
+			usedHashtags[hashtagName] = true
+
+			hashtag, err := hashtagRepo.FindOrCreate(hashtagName)
+			if err != nil {
+				continue
+			}
+
+			// Check if report already has this hashtag
+			reportHashtags, err := hashtagRepo.GetByReport(report.ID)
+			if err == nil {
+				alreadyHas := false
+				for _, rh := range reportHashtags {
+					if rh.ID == hashtag.ID {
+						alreadyHas = true
+						break
+					}
+				}
+				if alreadyHas {
+					continue
+				}
+			}
+
+			if err := hashtagRepo.CreateReportHashtag(report.ID, hashtag.ID); err != nil {
+				if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "UNIQUE") {
+					continue
+				}
+				fmt.Printf("  ⚠ Warning: Failed to assign hashtag %s to report %d: %v\n", hashtagName, report.ID, err)
+				continue
+			}
+
+			// Increment usage count
+			if err := hashtagRepo.IncrementUsageCount(hashtag.ID); err != nil {
+				// Non-fatal, continue
+			}
+
+			assignedCount++
+		}
+	}
+
+	fmt.Printf("  ✓ Assigned %d hashtags to reports\n", assignedCount)
+	return nil
+}
+
+func seedUserFollows(userFollowRepo repository.UserFollowRepository, userRepo repository.UserRepository) error {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// Get all users
+	users, _, err := userRepo.List(0, 1000)
+	if err != nil {
+		return fmt.Errorf("failed to fetch users: %w", err)
+	}
+
+	if len(users) < 2 {
+		fmt.Println("  ⚠ Not enough users found, skipping user follow seeding")
+		return nil
+	}
+
+	fmt.Println("Seeding user follows...")
+	createdCount := 0
+	followMap := make(map[string]bool)
+
+	// Create 50-100 follow relationships
+	numFollows := 50 + rng.Intn(51)
+
+	for i := 0; i < numFollows; i++ {
+		followerIdx := rng.Intn(len(users))
+		followingIdx := rng.Intn(len(users))
+
+		// Can't follow yourself
+		if followerIdx == followingIdx {
+			continue
+		}
+
+		follower := users[followerIdx]
+		following := users[followingIdx]
+
+		// Check for duplicate
+		key := fmt.Sprintf("%d-%d", follower.ID, following.ID)
+		if followMap[key] {
+			continue
+		}
+		followMap[key] = true
+
+		// Check if already following
+		isFollowing, err := userFollowRepo.IsFollowing(follower.ID, following.ID)
+		if err == nil && isFollowing {
+			continue
+		}
+
+		userFollow := &models.UserFollow{
+			FollowerID:  follower.ID,
+			FollowingID: following.ID,
+		}
+
+		if err := userFollowRepo.Create(userFollow); err != nil {
+			if strings.Contains(err.Error(), "duplicate") || strings.Contains(err.Error(), "UNIQUE") {
+				continue
+			}
+			fmt.Printf("  ⚠ Warning: Failed to create user follow: %v\n", err)
+			continue
+		}
+
+		createdCount++
+		if createdCount%10 == 0 {
+			fmt.Printf("  ✓ Created %d user follows...\n", createdCount)
+		}
+	}
+
+	fmt.Printf("  ✓ Created %d user follows\n", createdCount)
+	return nil
+}
+
+func seedBulkUploadLogs(bulkUploadLogRepo repository.BulkUploadLogRepository, userRepo repository.UserRepository) error {
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+
+	// Get all users
+	users, _, err := userRepo.List(0, 1000)
+	if err != nil {
+		return fmt.Errorf("failed to fetch users: %w", err)
+	}
+
+	if len(users) == 0 {
+		fmt.Println("  ⚠ No users found, skipping bulk upload log seeding")
+		return nil
+	}
+
+	entityTypes := []models.BulkUploadEntityType{
+		models.BulkUploadEntityTypeRoute,
+		models.BulkUploadEntityTypeStop,
+		models.BulkUploadEntityTypeVehicle,
+	}
+
+	statuses := []models.BulkUploadStatus{
+		models.BulkUploadStatusCompleted,
+		models.BulkUploadStatusCompleted,
+		models.BulkUploadStatusCompleted,
+		models.BulkUploadStatusFailed,
+		models.BulkUploadStatusPending,
+	}
+
+	fmt.Println("Seeding bulk upload logs...")
+	numLogs := 20
+	createdCount := 0
+
+	for i := 0; i < numLogs; i++ {
+		user := users[rng.Intn(len(users))]
+		entityType := entityTypes[rng.Intn(len(entityTypes))]
+		status := statuses[rng.Intn(len(statuses))]
+
+		totalRows := 50 + rng.Intn(200) // 50-250 rows
+		var successCount, duplicateCount, errorCount int
+		var errorMessage *string
+
+		if status == models.BulkUploadStatusCompleted {
+			successCount = totalRows - rng.Intn(10)
+			duplicateCount = rng.Intn(5)
+			errorCount = totalRows - successCount - duplicateCount
+		} else if status == models.BulkUploadStatusFailed {
+			successCount = rng.Intn(10)
+			errorCount = totalRows - successCount
+			errMsg := "Failed to process some rows due to validation errors"
+			errorMessage = &errMsg
+		} else {
+			successCount = 0
+			duplicateCount = 0
+			errorCount = 0
+		}
+
+		filePath := fmt.Sprintf("./uploads/bulk_uploads/bulk_%d/%s_%d.csv",
+			time.Now().Unix(),
+			entityType,
+			i+1,
+		)
+
+		// Random time within last 30 days
+		createdAt := time.Now().Add(-time.Duration(rng.Intn(30*24)) * time.Hour)
+		lastUpdatedAt := createdAt.Add(time.Duration(rng.Intn(60)) * time.Minute)
+
+		log := &models.BulkUploadLog{
+			EntityType:       entityType,
+			FilePath:         filePath,
+			Status:           status,
+			TotalRows:        totalRows,
+			SuccessCount:     successCount,
+			DuplicateCount:   duplicateCount,
+			ErrorCount:       errorCount,
+			ErrorMessage:     errorMessage,
+			UserID:           user.ID,
+			LastProcessedRow: successCount,
+			LastUpdatedAt:    lastUpdatedAt,
+			CreatedAt:        createdAt,
+			UpdatedAt:        lastUpdatedAt,
+		}
+
+		if err := bulkUploadLogRepo.Create(log); err != nil {
+			fmt.Printf("  ⚠ Warning: Failed to create bulk upload log: %v\n", err)
+			continue
+		}
+
+		createdCount++
+		if createdCount%5 == 0 {
+			fmt.Printf("  ✓ Created %d bulk upload logs...\n", createdCount)
+		}
+	}
+
+	fmt.Printf("  ✓ Created %d bulk upload logs\n", createdCount)
 	return nil
 }

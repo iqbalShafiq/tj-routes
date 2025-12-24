@@ -16,10 +16,12 @@ import (
 )
 
 type ReportHandler struct {
-	reportService service.ReportService
-	userService   service.UserService
-	fileStorage   utils.FileStorage
-	reportRepo    repository.ReportRepository
+	reportService  service.ReportService
+	userService    service.UserService
+	fileStorage    utils.FileStorage
+	reportRepo     repository.ReportRepository
+	reactionRepo   repository.ReactionRepository
+	userFollowService service.UserFollowService
 }
 
 type UpdateReportStatusRequest struct {
@@ -33,6 +35,17 @@ func NewReportHandler(reportService service.ReportService, userService service.U
 		userService:   userService,
 		fileStorage:   fileStorage,
 		reportRepo:    reportRepo,
+	}
+}
+
+func NewReportHandlerWithSocial(reportService service.ReportService, userService service.UserService, fileStorage utils.FileStorage, reportRepo repository.ReportRepository, reactionRepo repository.ReactionRepository, userFollowService service.UserFollowService) *ReportHandler {
+	return &ReportHandler{
+		reportService:     reportService,
+		userService:       userService,
+		fileStorage:       fileStorage,
+		reportRepo:        reportRepo,
+		reactionRepo:      reactionRepo,
+		userFollowService: userFollowService,
 	}
 }
 
@@ -280,5 +293,181 @@ func (h *ReportHandler) DeleteReport(c *gin.Context) {
 	}
 
 	MessageResponse(c, http.StatusOK, "Report deleted successfully")
+}
+
+func (h *ReportHandler) GetPublicFeed(c *gin.Context) {
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	sort := c.DefaultQuery("sort", "recent")
+	hashtag := c.Query("hashtag")
+	followedStr := c.Query("followed")
+
+	// Validate sort parameter
+	validSorts := map[string]bool{"recent": true, "popular": true, "trending": true}
+	if !validSorts[sort] {
+		sort = "recent"
+	}
+
+	var userID *uint
+	if userIDVal, exists := c.Get("user_id"); exists {
+		id := userIDVal.(uint)
+		userID = &id
+	}
+
+	filters := make(map[string]interface{})
+	if hashtag != "" {
+		filters["hashtag"] = hashtag
+	}
+	if followedStr == "true" && userID != nil {
+		filters["followed"] = true
+	}
+
+	reports, total, err := h.reportService.GetFeed(offset, limit, filters, sort, userID)
+	if err != nil {
+		InternalServerError(c, err)
+		return
+	}
+
+	// Enhance reports with additional data
+	enhancedReports := h.enhanceReports(c, reports)
+
+	SuccessResponse(c, http.StatusOK, gin.H{
+		"reports": enhancedReports,
+		"total":   total,
+		"offset":  offset,
+		"limit":   limit,
+	})
+}
+
+func (h *ReportHandler) GetTrending(c *gin.Context) {
+	offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	window := c.DefaultQuery("window", "24h")
+
+	// Validate window parameter
+	validWindows := map[string]bool{"1h": true, "24h": true, "7d": true, "30d": true, "all": true}
+	if !validWindows[window] {
+		window = "24h"
+	}
+
+	reports, total, err := h.reportService.GetTrending(offset, limit, window)
+	if err != nil {
+		InternalServerError(c, err)
+		return
+	}
+
+	// Enhance reports with additional data
+	enhancedReports := h.enhanceReports(c, reports)
+
+	SuccessResponse(c, http.StatusOK, gin.H{
+		"reports": enhancedReports,
+		"total":   total,
+		"offset":  offset,
+		"limit":   limit,
+		"window":  window,
+	})
+}
+
+func (h *ReportHandler) GetStories(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	userIDStr := c.Query("user_id")
+
+	var userID *uint
+	if userIDStr != "" {
+		if id, err := strconv.ParseUint(userIDStr, 10, 32); err == nil {
+			idUint := uint(id)
+			userID = &idUint
+		}
+	} else if userIDVal, exists := c.Get("user_id"); exists {
+		id := userIDVal.(uint)
+		userID = &id
+	}
+
+	reports, err := h.reportService.GetStories(userID, limit)
+	if err != nil {
+		InternalServerError(c, err)
+		return
+	}
+
+	// Enhance reports with additional data
+	enhancedReports := h.enhanceReports(c, reports)
+
+	SuccessResponse(c, http.StatusOK, gin.H{
+		"stories": enhancedReports,
+	})
+}
+
+// enhanceReports adds additional metadata to reports (follow status, reaction status, hashtags)
+func (h *ReportHandler) enhanceReports(c *gin.Context, reports []models.Report) []map[string]interface{} {
+	var userID *uint
+	if userIDVal, exists := c.Get("user_id"); exists {
+		id := userIDVal.(uint)
+		userID = &id
+	}
+
+	enhanced := make([]map[string]interface{}, len(reports))
+	for i, report := range reports {
+		enhancedReport := map[string]interface{}{
+			"id":             report.ID,
+			"user_id":        report.UserID,
+			"type":           report.Type,
+			"title":          report.Title,
+			"description":    report.Description,
+			"related_route_id": report.RelatedRouteID,
+			"related_stop_id":  report.RelatedStopID,
+			"status":         report.Status,
+			"upvotes":        report.Upvotes,
+			"downvotes":      report.Downvotes,
+			"comment_count":  report.CommentCount,
+			"created_at":     report.CreatedAt,
+			"updated_at":     report.UpdatedAt,
+			"user":           report.User,
+			"related_route":  report.RelatedRoute,
+			"related_stop":   report.RelatedStop,
+		}
+
+		// Add photo and PDF URLs if present
+		if report.PhotoURLs != nil {
+			var photoURLs []string
+			if err := json.Unmarshal([]byte(*report.PhotoURLs), &photoURLs); err == nil {
+				enhancedReport["photo_urls"] = photoURLs
+			}
+		}
+		if report.PDFURLs != nil {
+			var pdfURLs []string
+			if err := json.Unmarshal([]byte(*report.PDFURLs), &pdfURLs); err == nil {
+				enhancedReport["pdf_urls"] = pdfURLs
+			}
+		}
+
+		// Add hashtags if present
+		if len(report.Hashtags) > 0 {
+			hashtags := make([]string, 0, len(report.Hashtags))
+			for _, rh := range report.Hashtags {
+				hashtags = append(hashtags, "#"+rh.Hashtag.Name)
+			}
+			enhancedReport["hashtags"] = hashtags
+		}
+
+		// Add follow status if user is authenticated
+		if userID != nil && h.userFollowService != nil && report.UserID != *userID {
+			if isFollowing, err := h.userFollowService.IsFollowing(*userID, report.UserID); err == nil {
+				enhancedReport["is_following"] = isFollowing
+			}
+		}
+
+		// Add user reaction if user is authenticated and reaction repo is available
+		if userID != nil && h.reactionRepo != nil {
+			if reaction, err := h.reactionRepo.FindByUserAndTarget(*userID, models.ReactionTargetReport, report.ID); err == nil && reaction != nil {
+				enhancedReport["user_reaction"] = reaction.ReactionType
+			} else {
+				enhancedReport["user_reaction"] = nil
+			}
+		}
+
+		enhanced[i] = enhancedReport
+	}
+
+	return enhanced
 }
 

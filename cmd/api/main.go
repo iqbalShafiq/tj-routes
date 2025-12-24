@@ -186,6 +186,8 @@ func main() {
 	reactionRepo := repository.NewReactionRepository(db)
 	badgeRepo := repository.NewBadgeRepository(db)
 	userBadgeRepo := repository.NewUserBadgeRepository(db)
+	userFollowRepo := repository.NewUserFollowRepository(db)
+	hashtagRepo := repository.NewHashtagRepository(db)
 
 	// Initialize file storage (needed for bulk upload service and handlers)
 	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.Host, cfg.Server.Port)
@@ -220,11 +222,19 @@ func main() {
 	reputationService := service.NewReputationService(userRepo)
 	badgeService := service.NewBadgeService(badgeRepo, userBadgeRepo, userRepo, reportRepo, commentRepo, reactionRepo)
 	
-	// Initialize report service with reputation integration
-	reportService := service.NewReportServiceWithReputation(
+	// Initialize user follow service
+	userFollowService := service.NewUserFollowService(userFollowRepo, userRepo)
+	
+	// Initialize hashtag service
+	hashtagService := service.NewHashtagService(hashtagRepo)
+	
+	// Initialize report service with social features (hashtags, follows, reputation)
+	reportService := service.NewReportServiceWithSocial(
 		reportRepo,
 		routeRepo,
 		stopRepo,
+		hashtagRepo,
+		userFollowService,
 		reputationService,
 		badgeService,
 	)
@@ -293,12 +303,15 @@ func main() {
 	stopHandler := handler.NewStopHandler(stopService, fileStorage)
 	routeHandler := handler.NewRouteHandler(routeService)
 	vehicleHandler := handler.NewVehicleHandler(vehicleService, fileStorage)
-	reportHandler := handler.NewReportHandler(reportService, userService, fileStorage, reportRepo)
+	// Use enhanced report handler with social features
+	reportHandler := handler.NewReportHandlerWithSocial(reportService, userService, fileStorage, reportRepo, reactionRepo, userFollowService)
 	userHandler := handler.NewUserHandler(userService)
 	docsHandler := handler.NewDocsHandler()
 	commentHandler := handler.NewCommentHandler(commentService)
 	reactionHandler := handler.NewReactionHandler(reactionService)
 	leaderboardHandler := handler.NewLeaderboardHandler(userRepo, badgeService, reputationService)
+	userFollowHandler := handler.NewUserFollowHandler(userFollowService)
+	hashtagHandler := handler.NewHashtagHandler(hashtagService)
 
 	// Initialize bulk upload handler (always create, even if service is nil)
 	// This ensures routes are registered, but will return error if service unavailable
@@ -469,6 +482,20 @@ func main() {
 			reports := public.Group("/reports")
 			{
 				reports.POST("", reportHandler.CreateReport)
+				// Public feed endpoint
+				reports.GET("/feed", reportHandler.GetPublicFeed)
+				// Trending reports
+				reports.GET("/trending", reportHandler.GetTrending)
+				// Stories
+				reports.GET("/stories", reportHandler.GetStories)
+			}
+
+			// Hashtags (public read access)
+			hashtags := public.Group("/hashtags")
+			{
+				hashtags.GET("/trending", hashtagHandler.GetTrending)
+				hashtags.GET("/search", hashtagHandler.SearchHashtags)
+				hashtags.GET("/:name/reports", hashtagHandler.GetReportsByHashtag)
 			}
 		}
 
@@ -545,6 +572,13 @@ func main() {
 			{
 				// Public profile endpoint (authenticated users can view any profile)
 				users.GET("/:id/profile", leaderboardHandler.GetUserProfile)
+				
+				// User follow endpoints
+				users.POST("/:id/follow", userFollowHandler.FollowUser)
+				users.DELETE("/:id/follow", userFollowHandler.UnfollowUser)
+				users.GET("/:id/followers", userFollowHandler.GetFollowers)
+				users.GET("/:id/following", userFollowHandler.GetFollowing)
+				users.GET("/:id/follow-status", userFollowHandler.GetFollowStatus)
 				
 				// Admin-only endpoints
 				adminUsers := users.Group("")

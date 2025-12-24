@@ -43,7 +43,8 @@ type Report struct {
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
 
 	// Relationships
-	User         User   `gorm:"foreignKey:UserID" json:"user,omitempty"`
-	RelatedRoute *Route `gorm:"foreignKey:RelatedRouteID" json:"related_route,omitempty"`
-	RelatedStop  *Stop  `gorm:"foreignKey:RelatedStopID" json:"related_stop,omitempty"`
+	User         User           `gorm:"foreignKey:UserID" json:"user,omitempty"`
+	RelatedRoute *Route         `gorm:"foreignKey:RelatedRouteID" json:"related_route,omitempty"`
+	RelatedStop  *Stop          `gorm:"foreignKey:RelatedStopID" json:"related_stop,omitempty"`
+	Hashtags     []ReportHashtag `gorm:"foreignKey:ReportID" json:"hashtags,omitempty"`
 }

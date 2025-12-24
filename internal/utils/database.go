@@ -74,6 +74,9 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.Reaction{},
 		&models.Badge{},
 		&models.UserBadge{},
+		&models.UserFollow{},
+		&models.Hashtag{},
+		&models.ReportHashtag{},
 	); err != nil {
 		return err
 	}

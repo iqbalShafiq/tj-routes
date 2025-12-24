@@ -12,6 +12,7 @@ info:
     - Stop/Terminal Management
     - Vehicle Management
     - Reporting System
+    - Social Media Features (Public Feed, Hashtags, User Following, Trending, Stories)
   version: 1.0.0
   contact:
     name: API Support
@@ -47,6 +48,10 @@ tags:
     description: User leaderboard and reputation system
   - name: Badges
     description: Achievement badges system
+  - name: Hashtags
+    description: Hashtag management and trending hashtags
+  - name: UserFollows
+    description: User follow/unfollow functionality
   - name: Health
     description: Health check endpoint
 
@@ -840,6 +845,116 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/reports/feed:
+    get:
+      tags:
+        - Reports
+      summary: Get public feed
+      description: Get public feed of reports with sorting and filtering options. **Guest accessible** (authentication optional). Supports sorting by recent, popular, or trending. Can filter by hashtags and followed users.
+      operationId: getPublicFeed
+      parameters:
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [recent, popular, trending]
+            default: recent
+          description: Sort order for reports
+        - name: hashtag
+          in: query
+          schema:
+            type: string
+          description: Filter by hashtag name (without #)
+        - name: followed
+          in: query
+          schema:
+            type: string
+            enum: ["true", "false"]
+          description: Show only reports from followed users (requires authentication)
+      responses:
+        "200":
+          description: Feed of reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/reports/trending:
+    get:
+      tags:
+        - Reports
+      summary: Get trending reports
+      description: Get trending reports based on engagement metrics and recency. **Guest accessible** (authentication optional).
+      operationId: getTrendingReports
+      parameters:
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: window
+          in: query
+          schema:
+            type: string
+            enum: [1h, 24h, 7d, 30d, all]
+            default: 24h
+          description: Time window for trending calculation
+      responses:
+        "200":
+          description: Trending reports
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TrendingResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/reports/stories:
+    get:
+      tags:
+        - Reports
+      summary: Get stories
+      description: Get recent reports with photos (stories). **Guest accessible** (authentication optional). Returns reports with photos from the last 24 hours.
+      operationId: getStories
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+          description: Maximum number of stories to return
+        - name: user_id
+          in: query
+          schema:
+            type: integer
+          description: Filter stories by specific user ID
+      responses:
+        "200":
+          description: Stories list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoriesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
   /api/v1/reports/{id}/status:
     put:
       tags:
@@ -1150,6 +1265,94 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/v1/hashtags/trending:
+    get:
+      tags:
+        - Hashtags
+      summary: Get trending hashtags
+      description: Get list of trending hashtags ordered by usage count. **Guest accessible** (authentication optional).
+      operationId: getTrendingHashtags
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        "200":
+          description: List of trending hashtags
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HashtagListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/hashtags/search:
+    get:
+      tags:
+        - Hashtags
+      summary: Search hashtags
+      description: Search for hashtags by name. **Guest accessible** (authentication optional).
+      operationId: searchHashtags
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query for hashtag name
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+            maximum: 50
+      responses:
+        "200":
+          description: List of matching hashtags
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HashtagListResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/hashtags/{name}/reports:
+    get:
+      tags:
+        - Hashtags
+      summary: Get reports by hashtag
+      description: Get all reports associated with a specific hashtag. **Guest accessible** (authentication optional).
+      operationId: getReportsByHashtag
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Hashtag name (without #)
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of reports with the hashtag
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReportListResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/users/{id}/profile:
     get:
       tags:
@@ -1284,6 +1487,160 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /api/v1/users/{id}/follow:
+    post:
+      tags:
+        - UserFollows
+      summary: Follow a user
+      description: Follow another user to see their reports in your following feed
+      operationId: followUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID of the user to follow
+      responses:
+        "200":
+          description: Successfully followed user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags:
+        - UserFollows
+      summary: Unfollow a user
+      description: Unfollow a user
+      operationId: unfollowUser
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID of the user to unfollow
+      responses:
+        "200":
+          description: Successfully unfollowed user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/users/{id}/followers:
+    get:
+      tags:
+        - UserFollows
+      summary: Get user's followers
+      description: Get paginated list of users who follow this user
+      operationId: getUserFollowers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of followers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserFollowListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/users/{id}/following:
+    get:
+      tags:
+        - UserFollows
+      summary: Get users that user follows
+      description: Get paginated list of users that this user follows
+      operationId: getUserFollowing
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of following users
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserFollowListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/users/{id}/follow-status:
+    get:
+      tags:
+        - UserFollows
+      summary: Check follow status
+      description: Check if the current authenticated user follows the specified user
+      operationId: getFollowStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID of the user to check follow status for
+      responses:
+        "200":
+          description: Follow status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FollowStatusResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /api/v1/users/{id}/role:
     put:
@@ -1810,6 +2167,22 @@ components:
           type: integer
           default: 0
           example: 8
+        hashtags:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: Array of hashtag names (without #)
+          example: ["route1", "delay", "rushhour"]
+        is_following:
+          type: boolean
+          nullable: true
+          description: Whether the current user follows the report author (only present if authenticated)
+        user_reaction:
+          type: string
+          nullable: true
+          enum: [upvote, downvote]
+          description: Current user's reaction to this report (only present if authenticated)
         created_at:
           type: string
           format: date-time
@@ -2217,6 +2590,151 @@ components:
             limit:
               type: integer
               example: 10
+
+    Hashtag:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "route1"
+        usage_count:
+          type: integer
+          default: 0
+          example: 45
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+
+    FeedResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            reports:
+              type: array
+              items:
+                $ref: "#/components/schemas/Report"
+            total:
+              type: integer
+              example: 150
+            offset:
+              type: integer
+              example: 0
+            limit:
+              type: integer
+              example: 20
+
+    TrendingResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            reports:
+              type: array
+              items:
+                $ref: "#/components/schemas/Report"
+            total:
+              type: integer
+              example: 50
+            offset:
+              type: integer
+              example: 0
+            limit:
+              type: integer
+              example: 20
+            window:
+              type: string
+              example: "24h"
+
+    StoriesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            stories:
+              type: array
+              items:
+                $ref: "#/components/schemas/Report"
+
+    HashtagListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            hashtags:
+              type: array
+              items:
+                $ref: "#/components/schemas/Hashtag"
+            query:
+              type: string
+              nullable: true
+              description: Search query if this is a search response
+
+    UserFollowListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            followers:
+              type: array
+              items:
+                $ref: "#/components/schemas/User"
+              description: List of followers (for followers endpoint)
+            following:
+              type: array
+              items:
+                $ref: "#/components/schemas/User"
+              description: List of following users (for following endpoint)
+            total:
+              type: integer
+              example: 25
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 20
+
+    FollowStatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            is_following:
+              type: boolean
+              example: true
 
   responses:
     BadRequest:

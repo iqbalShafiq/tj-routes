@@ -187,18 +187,18 @@ func (r *reportRepository) GetTrending(offset, limit int, timeWindow string) ([]
 
 	// Calculate trending score with age penalty and recency boost
 	// score = (upvotes - downvotes) * 2 + (comment_count * 0.5) - age_penalty + recency_boost
-	// We'll use SQL expressions for this
+	// Order by the calculated expression directly
+	trendingScoreExpr := "(upvotes - downvotes) * 2 + " +
+		"(comment_count * 0.5) - " +
+		"(EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600) * 0.1 + " +
+		"CASE " +
+		"WHEN created_at > NOW() - INTERVAL '1 hour' THEN 10 " +
+		"WHEN created_at > NOW() - INTERVAL '24 hours' THEN 5 " +
+		"ELSE 0 " +
+		"END DESC, created_at DESC"
+
 	err := query.
-		Select("*, "+
-			"((upvotes - downvotes) * 2 + "+
-			"(comment_count * 0.5) - "+
-			"(EXTRACT(EPOCH FROM (NOW() - created_at)) / 3600) * 0.1 + "+
-			"CASE "+
-			"WHEN created_at > NOW() - INTERVAL '1 hour' THEN 10 "+
-			"WHEN created_at > NOW() - INTERVAL '24 hours' THEN 5 "+
-			"ELSE 0 "+
-			"END as trending_score").
-		Order("trending_score DESC, created_at DESC").
+		Order(trendingScoreExpr).
 		Preload("User").
 		Preload("RelatedRoute").
 		Preload("RelatedStop").

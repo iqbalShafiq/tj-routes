@@ -532,6 +532,7 @@ func main() {
 			reports := protected.Group("/reports")
 			{
 				reports.GET("", reportHandler.ListReports)
+				// Note: /feed, /trending, /stories are handled in public group with OptionalAuthMiddleware
 				reports.GET("/:id", reportHandler.GetReport)
 				reports.PUT("/:id/status", middleware.RequireAdmin(), reportHandler.UpdateReportStatus)
 				reports.DELETE("/:id", middleware.RequireAdmin(), reportHandler.DeleteReport)

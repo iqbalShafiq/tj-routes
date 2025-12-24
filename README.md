@@ -118,6 +118,33 @@ go run cmd/api/main.go
 
 The API will be available at `http://localhost:8080`
 
+### Accessing from Mobile Device (Same WiFi Network)
+
+To access the API from your phone or other devices on the same WiFi network:
+
+1. **Find your computer's local IP address:**
+   - **macOS/Linux**: Run `ifconfig | grep "inet " | grep -v 127.0.0.1` or `ipconfig getifaddr en0` (macOS)
+   - **Windows**: Run `ipconfig` and look for "IPv4 Address" under your WiFi adapter
+   - The IP will typically look like `192.168.x.x` or `10.0.x.x`
+
+2. **Update your `.env` file** to bind to all network interfaces:
+   ```bash
+   SERVER_HOST=0.0.0.0
+   SERVER_PORT=8080
+   ```
+   (Change `SERVER_HOST` from `localhost` to `0.0.0.0`)
+
+3. **Restart the server** with the updated configuration
+
+4. **Access from your phone:**
+   - Open a browser or API client on your phone
+   - Use: `http://YOUR_LOCAL_IP:8080`
+   - Example: `http://192.168.1.100:8080`
+   - Test the health endpoint: `http://YOUR_LOCAL_IP:8080/health`
+   - API docs: `http://YOUR_LOCAL_IP:8080/api/docs`
+
+**Note**: Make sure your phone and computer are on the same WiFi network, and that your firewall allows incoming connections on port 8080.
+
 ### API Documentation
 
 Once the server is running, you can access the interactive API documentation:

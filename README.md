@@ -123,15 +123,18 @@ The API will be available at `http://localhost:8080`
 To access the API from your phone or other devices on the same WiFi network:
 
 1. **Find your computer's local IP address:**
+
    - **macOS/Linux**: Run `ifconfig | grep "inet " | grep -v 127.0.0.1` or `ipconfig getifaddr en0` (macOS)
    - **Windows**: Run `ipconfig` and look for "IPv4 Address" under your WiFi adapter
    - The IP will typically look like `192.168.x.x` or `10.0.x.x`
 
 2. **Update your `.env` file** to bind to all network interfaces:
+
    ```bash
    SERVER_HOST=0.0.0.0
    SERVER_PORT=8080
    ```
+
    (Change `SERVER_HOST` from `localhost` to `0.0.0.0`)
 
 3. **Restart the server** with the updated configuration
@@ -169,6 +172,7 @@ Once the server is running, you can access the interactive API documentation:
 ### Guest Access
 
 Guest users (non-authenticated) can access:
+
 - **Read-only endpoints**: Routes, Stops, and Vehicles (GET requests)
 - **Report creation**: Create reports (assigned to system user account)
 

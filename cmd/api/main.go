@@ -488,6 +488,8 @@ func main() {
 				reports.GET("/trending", reportHandler.GetTrending)
 				// Stories
 				reports.GET("/stories", reportHandler.GetStories)
+				// Get report details (public access)
+				reports.GET("/:id", reportHandler.GetReport)
 			}
 
 			// Hashtags (public read access)
@@ -532,8 +534,7 @@ func main() {
 			reports := protected.Group("/reports")
 			{
 				reports.GET("", reportHandler.ListReports)
-				// Note: /feed, /trending, /stories are handled in public group with OptionalAuthMiddleware
-				reports.GET("/:id", reportHandler.GetReport)
+				// Note: /feed, /trending, /stories, and /:id are handled in public group with OptionalAuthMiddleware
 				reports.PUT("/:id/status", middleware.RequireAdmin(), reportHandler.UpdateReportStatus)
 				reports.DELETE("/:id", middleware.RequireAdmin(), reportHandler.DeleteReport)
 				

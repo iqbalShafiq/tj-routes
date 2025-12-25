@@ -2,7 +2,6 @@ package handler
 
 import (
 	"encoding/json"
-	"errors"
 	"mime/multipart"
 	"net/http"
 	"strconv"
@@ -97,16 +96,6 @@ func (h *ReportHandler) GetReport(c *gin.Context) {
 	if err != nil {
 		NotFound(c, err)
 		return
-	}
-
-	// Non-admin users can only view their own reports
-	userRole, exists := c.Get("user_role")
-	if exists && userRole.(models.UserRole) != models.RoleAdmin {
-		userID, _ := c.Get("user_id")
-		if report.UserID != userID.(uint) {
-			Forbidden(c, errors.New("access denied: you can only view your own reports"))
-			return
-		}
 	}
 
 	SuccessResponse(c, http.StatusOK, report)

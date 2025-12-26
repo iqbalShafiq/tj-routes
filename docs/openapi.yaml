@@ -98,15 +98,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              example:
-                success: true
-                data:
-                  id: 1
-                  email: user@example.com
-                  username: johndoe
-                  role: common_user
-                  created_at: "2024-01-01T00:00:00Z"
+                $ref: "#/components/schemas/UserResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
 
@@ -251,7 +243,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/StopResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -278,7 +270,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/StopResponse"
         "404":
           $ref: "#/components/responses/NotFound"
     put:
@@ -319,7 +311,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/StopResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -412,7 +404,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/RouteResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -439,7 +431,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/RouteResponse"
         "404":
           $ref: "#/components/responses/NotFound"
     put:
@@ -468,7 +460,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/RouteResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -556,20 +548,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              example:
-                success: true
-                data:
-                  forum:
-                    id: 1
-                    route_id: 1
-                    created_at: "2024-01-01T00:00:00Z"
-                    route:
-                      id: 1
-                      route_number: "1"
-                      name: "Blok M - Kota"
-                  member_count: 25
-                  is_member: false
+                $ref: "#/components/schemas/ForumResponse"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -644,7 +623,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/VehicleResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -671,7 +650,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/VehicleResponse"
         "404":
           $ref: "#/components/responses/NotFound"
     put:
@@ -715,7 +694,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/VehicleResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -833,7 +812,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/ReportResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
 
@@ -858,7 +837,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/ReportResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1062,19 +1041,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              example:
-                success: true
-                data:
-                  comments:
-                    - id: 1
-                      report_id: 1
-                      user_id: 2
-                      content: "Great report!"
-                      upvotes: 5
-                      downvotes: 0
-                      created_at: "2024-01-01T00:00:00Z"
-                      replies: []
+                $ref: "#/components/schemas/CommentListResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
     post:
@@ -1103,7 +1070,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/CommentResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1192,7 +1159,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/CommentResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1303,16 +1270,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              example:
-                success: true
-                data:
-                  leaderboard:
-                    - id: 1
-                      username: "user1"
-                      reputation_points: 500
-                      level: "expert"
-                  limit: 10
+                $ref: "#/components/schemas/LeaderboardResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -1417,17 +1375,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              example:
-                success: true
-                data:
-                  categories:
-                    - id: 1
-                      name: "Crash"
-                      description: "Vehicle accidents or crashes"
-                    - id: 2
-                      name: "Trash"
-                      description: "Litter or garbage issues"
+                $ref: "#/components/schemas/ReportCategoryListResponse"
     post:
       tags:
         - Reports
@@ -1448,7 +1396,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/ReportCategoryResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -1477,25 +1425,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              example:
-                success: true
-                data:
-                  user:
-                    id: 1
-                    username: "user1"
-                    email: "user1@example.com"
-                  reputation_points: 250
-                  level: "trusted"
-                  badges:
-                    - id: 1
-                      badge_id: 1
-                      earned_at: "2024-01-01T00:00:00Z"
-                      badge:
-                        id: 1
-                        name: "First Report"
-                        description: "Submitted your first report"
-                        icon: "🎯"
+                $ref: "#/components/schemas/UserProfileResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -1516,17 +1446,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              example:
-                success: true
-                data:
-                  badges:
-                    - id: 1
-                      name: "First Report"
-                      description: "Submitted your first report"
-                      icon: "🎯"
-                      criteria_type: "reports_accepted"
-                      criteria_value: 1
+                $ref: "#/components/schemas/BadgeListResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -1583,7 +1503,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/UserResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "403":
@@ -1799,7 +1719,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/ForumResponse"
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -1878,11 +1798,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              example:
-                success: true
-                data:
-                  is_member: true
+                $ref: "#/components/schemas/MembershipStatusResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
 
@@ -1915,21 +1831,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              example:
-                success: true
-                data:
-                  members:
-                    - id: 1
-                      forum_id: 1
-                      user_id: 2
-                      created_at: "2024-01-01T00:00:00Z"
-                      user:
-                        id: 2
-                        username: "user2"
-                  total: 25
-                  page: 1
-                  limit: 20
+                $ref: "#/components/schemas/ForumMemberListResponse"
 
   /api/v1/forums/{id}/posts:
     get:
@@ -1971,7 +1873,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/ForumPostListResponse"
         "404":
           $ref: "#/components/responses/NotFound"
     post:
@@ -2016,7 +1918,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/ForumPostResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2046,7 +1948,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/ForumPostResponse"
         "404":
           $ref: "#/components/responses/NotFound"
     put:
@@ -2080,7 +1982,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/ForumPostResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2146,7 +2048,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/ForumPostResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2178,7 +2080,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/ForumPostResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2207,7 +2109,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/CommentListResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
     post:
@@ -2236,7 +2138,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
+                $ref: "#/components/schemas/CommentResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2334,20 +2236,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              example:
-                success: true
-                data:
-                  id: 1
-                  entity_type: route
-                  file_path: "./uploads/bulk_uploads/bulk_1234567890/routes.csv"
-                  status: pending
-                  total_rows: 0
-                  success_count: 0
-                  duplicate_count: 0
-                  error_count: 0
-                  user_id: 1
-                  created_at: "2024-01-01T00:00:00Z"
+                $ref: "#/components/schemas/BulkUploadResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
         "401":
@@ -2376,20 +2265,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/SuccessResponse"
-              example:
-                success: true
-                data:
-                  id: 1
-                  entity_type: route
-                  status: processing
-                  total_rows: 100
-                  success_count: 45
-                  duplicate_count: 5
-                  error_count: 0
-                  last_processed_row: 50
-                  created_at: "2024-01-01T00:00:00Z"
-                  updated_at: "2024-01-01T00:05:00Z"
+                $ref: "#/components/schemas/BulkUploadResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -3559,6 +3435,246 @@ components:
             is_following:
               type: boolean
               example: true
+
+    ForumResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            forum:
+              $ref: "#/components/schemas/Forum"
+            member_count:
+              type: integer
+              example: 25
+            is_member:
+              type: boolean
+              example: false
+
+    ForumMemberListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            members:
+              type: array
+              items:
+                $ref: "#/components/schemas/ForumMember"
+            total:
+              type: integer
+              example: 25
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 20
+
+    CommentListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            comments:
+              type: array
+              items:
+                $ref: "#/components/schemas/Comment"
+
+    ForumPostListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            posts:
+              type: array
+              items:
+                $ref: "#/components/schemas/ForumPost"
+            total:
+              type: integer
+              example: 50
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 20
+
+    MembershipStatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            is_member:
+              type: boolean
+              example: true
+
+    LeaderboardResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            leaderboard:
+              type: array
+              items:
+                $ref: "#/components/schemas/User"
+            limit:
+              type: integer
+              example: 10
+
+    ReportCategoryListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            categories:
+              type: array
+              items:
+                $ref: "#/components/schemas/ReportCategory"
+
+    UserProfileResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            user:
+              $ref: "#/components/schemas/User"
+            reputation_points:
+              type: integer
+              example: 250
+            level:
+              type: string
+              enum: [newcomer, contributor, trusted, expert, legend]
+              example: trusted
+            badges:
+              type: array
+              items:
+                $ref: "#/components/schemas/UserBadge"
+
+    BadgeListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            badges:
+              type: array
+              items:
+                $ref: "#/components/schemas/Badge"
+
+    StopResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/Stop"
+
+    RouteResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/Route"
+
+    VehicleResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/Vehicle"
+
+    ReportResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/Report"
+
+    CommentResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/Comment"
+
+    ForumPostResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/ForumPost"
+
+    UserResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/User"
+
+    ReportCategoryResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/ReportCategory"
+
+    BulkUploadResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/BulkUploadLog"
 
   responses:
     BadRequest:

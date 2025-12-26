@@ -11,9 +11,12 @@ type CommentRepository interface {
 	FindByID(id uint) (*models.Comment, error)
 	FindByReportID(reportID uint) ([]models.Comment, error)
 	FindThreadedByReportID(reportID uint) ([]models.Comment, error)
+	FindByForumPostID(forumPostID uint) ([]models.Comment, error)
+	FindThreadedByForumPostID(forumPostID uint) ([]models.Comment, error)
 	Update(comment *models.Comment) error
 	Delete(id uint) error
 	CountByReportID(reportID uint) (int64, error)
+	CountByForumPostID(forumPostID uint) (int64, error)
 	CountByUserID(userID uint) (int64, error)
 }
 
@@ -73,6 +76,36 @@ func (r *commentRepository) Delete(id uint) error {
 func (r *commentRepository) CountByReportID(reportID uint) (int64, error) {
 	var count int64
 	err := r.db.Model(&models.Comment{}).Where("report_id = ?", reportID).Count(&count).Error
+	return count, err
+}
+
+func (r *commentRepository) FindByForumPostID(forumPostID uint) ([]models.Comment, error) {
+	var comments []models.Comment
+	err := r.db.Where("forum_post_id = ?", forumPostID).
+		Where("parent_id IS NULL"). // Only top-level comments
+		Preload("User").
+		Preload("Replies.User").
+		Order("created_at ASC").
+		Find(&comments).Error
+	return comments, err
+}
+
+func (r *commentRepository) FindThreadedByForumPostID(forumPostID uint) ([]models.Comment, error) {
+	var comments []models.Comment
+	err := r.db.Where("forum_post_id = ?", forumPostID).
+		Where("parent_id IS NULL"). // Only top-level comments
+		Preload("User").
+		Preload("Replies", func(db *gorm.DB) *gorm.DB {
+			return db.Preload("User").Order("created_at ASC")
+		}).
+		Order("created_at ASC").
+		Find(&comments).Error
+	return comments, err
+}
+
+func (r *commentRepository) CountByForumPostID(forumPostID uint) (int64, error) {
+	var count int64
+	err := r.db.Model(&models.Comment{}).Where("forum_post_id = ?", forumPostID).Count(&count).Error
 	return count, err
 }
 

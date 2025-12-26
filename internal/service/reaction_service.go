@@ -13,9 +13,10 @@ type ReactionService interface {
 }
 
 type reactionService struct {
-	reactionRepo repository.ReactionRepository
-	reportRepo   repository.ReportRepository
-	commentRepo  repository.CommentRepository
+	reactionRepo  repository.ReactionRepository
+	reportRepo    repository.ReportRepository
+	commentRepo   repository.CommentRepository
+	forumPostRepo repository.ForumPostRepository
 	reputationService ReputationService
 }
 
@@ -29,6 +30,22 @@ func NewReactionService(
 		reactionRepo:      reactionRepo,
 		reportRepo:        reportRepo,
 		commentRepo:       commentRepo,
+		reputationService: reputationService,
+	}
+}
+
+func NewReactionServiceWithForumPost(
+	reactionRepo repository.ReactionRepository,
+	reportRepo repository.ReportRepository,
+	commentRepo repository.CommentRepository,
+	forumPostRepo repository.ForumPostRepository,
+	reputationService ReputationService,
+) ReactionService {
+	return &reactionService{
+		reactionRepo:      reactionRepo,
+		reportRepo:        reportRepo,
+		commentRepo:       commentRepo,
+		forumPostRepo:     forumPostRepo,
 		reputationService: reputationService,
 	}
 }
@@ -102,7 +119,7 @@ func (s *reactionService) GetUserReaction(userID uint, targetType models.Reactio
 	return s.reactionRepo.FindByUserAndTarget(userID, targetType, targetID)
 }
 
-// updateTargetCounts updates denormalized counts on report or comment
+// updateTargetCounts updates denormalized counts on report, comment, or forum post
 func (s *reactionService) updateTargetCounts(targetType models.ReactionTargetType, targetID uint, reactionType models.ReactionType, delta int) {
 	switch targetType {
 	case models.ReactionTargetReport:
@@ -125,6 +142,18 @@ func (s *reactionService) updateTargetCounts(targetType models.ReactionTargetTyp
 			}
 			s.commentRepo.Update(comment)
 		}
+	case models.ReactionTargetForumPost:
+		if s.forumPostRepo != nil {
+			forumPost, err := s.forumPostRepo.FindByID(targetID)
+			if err == nil {
+				if reactionType == models.ReactionUpvote {
+					forumPost.Upvotes += delta
+				} else {
+					forumPost.Downvotes += delta
+				}
+				s.forumPostRepo.Update(forumPost)
+			}
+		}
 	}
 }
 
@@ -145,6 +174,15 @@ func (s *reactionService) awardReactionPoints(targetType models.ReactionTargetTy
 			return
 		}
 		ownerID = comment.UserID
+	case models.ReactionTargetForumPost:
+		if s.forumPostRepo == nil {
+			return
+		}
+		forumPost, err := s.forumPostRepo.FindByID(targetID)
+		if err != nil {
+			return
+		}
+		ownerID = forumPost.UserID
 	default:
 		return
 	}
@@ -153,15 +191,19 @@ func (s *reactionService) awardReactionPoints(targetType models.ReactionTargetTy
 	if reactionType == models.ReactionUpvote {
 		if targetType == models.ReactionTargetReport {
 			s.reputationService.AddPoints(ownerID, 1) // Report upvote = +1
-		} else {
+		} else if targetType == models.ReactionTargetComment {
 			s.reputationService.AddPoints(ownerID, 2) // Comment upvote = +2
+		} else if targetType == models.ReactionTargetForumPost {
+			s.reputationService.AddPoints(ownerID, 1) // Forum post upvote = +1
 		}
 	} else {
 		// Downvote removes points
 		if targetType == models.ReactionTargetReport {
 			s.reputationService.AddPoints(ownerID, -1) // Report downvote = -1
-		} else {
+		} else if targetType == models.ReactionTargetComment {
 			s.reputationService.AddPoints(ownerID, -1) // Comment downvote = -1
+		} else if targetType == models.ReactionTargetForumPost {
+			s.reputationService.AddPoints(ownerID, -1) // Forum post downvote = -1
 		}
 	}
 }
@@ -183,6 +225,15 @@ func (s *reactionService) removeReactionPoints(targetType models.ReactionTargetT
 			return
 		}
 		ownerID = comment.UserID
+	case models.ReactionTargetForumPost:
+		if s.forumPostRepo == nil {
+			return
+		}
+		forumPost, err := s.forumPostRepo.FindByID(targetID)
+		if err != nil {
+			return
+		}
+		ownerID = forumPost.UserID
 	default:
 		return
 	}
@@ -191,13 +242,17 @@ func (s *reactionService) removeReactionPoints(targetType models.ReactionTargetT
 	if reactionType == models.ReactionUpvote {
 		if targetType == models.ReactionTargetReport {
 			s.reputationService.AddPoints(ownerID, -1)
-		} else {
+		} else if targetType == models.ReactionTargetComment {
 			s.reputationService.AddPoints(ownerID, -2)
+		} else if targetType == models.ReactionTargetForumPost {
+			s.reputationService.AddPoints(ownerID, -1)
 		}
 	} else {
 		if targetType == models.ReactionTargetReport {
 			s.reputationService.AddPoints(ownerID, 1)
-		} else {
+		} else if targetType == models.ReactionTargetComment {
+			s.reputationService.AddPoints(ownerID, 1)
+		} else if targetType == models.ReactionTargetForumPost {
 			s.reputationService.AddPoints(ownerID, 1)
 		}
 	}
@@ -220,6 +275,15 @@ func (s *reactionService) updateOwnerReputation(targetType models.ReactionTarget
 			return
 		}
 		ownerID = comment.UserID
+	case models.ReactionTargetForumPost:
+		if s.forumPostRepo == nil {
+			return
+		}
+		forumPost, err := s.forumPostRepo.FindByID(targetID)
+		if err != nil {
+			return
+		}
+		ownerID = forumPost.UserID
 	default:
 		return
 	}
@@ -228,13 +292,17 @@ func (s *reactionService) updateOwnerReputation(targetType models.ReactionTarget
 	if oldType == models.ReactionUpvote {
 		if targetType == models.ReactionTargetReport {
 			s.reputationService.AddPoints(ownerID, -1)
-		} else {
+		} else if targetType == models.ReactionTargetComment {
 			s.reputationService.AddPoints(ownerID, -2)
+		} else if targetType == models.ReactionTargetForumPost {
+			s.reputationService.AddPoints(ownerID, -1)
 		}
 	} else {
 		if targetType == models.ReactionTargetReport {
 			s.reputationService.AddPoints(ownerID, 1)
-		} else {
+		} else if targetType == models.ReactionTargetComment {
+			s.reputationService.AddPoints(ownerID, 1)
+		} else if targetType == models.ReactionTargetForumPost {
 			s.reputationService.AddPoints(ownerID, 1)
 		}
 	}
@@ -243,13 +311,17 @@ func (s *reactionService) updateOwnerReputation(targetType models.ReactionTarget
 	if newType == models.ReactionUpvote {
 		if targetType == models.ReactionTargetReport {
 			s.reputationService.AddPoints(ownerID, 1)
-		} else {
+		} else if targetType == models.ReactionTargetComment {
 			s.reputationService.AddPoints(ownerID, 2)
+		} else if targetType == models.ReactionTargetForumPost {
+			s.reputationService.AddPoints(ownerID, 1)
 		}
 	} else {
 		if targetType == models.ReactionTargetReport {
 			s.reputationService.AddPoints(ownerID, -1)
-		} else {
+		} else if targetType == models.ReactionTargetComment {
+			s.reputationService.AddPoints(ownerID, -1)
+		} else if targetType == models.ReactionTargetForumPost {
 			s.reputationService.AddPoints(ownerID, -1)
 		}
 	}

@@ -14,8 +14,9 @@ const (
 type ReactionTargetType string
 
 const (
-	ReactionTargetReport  ReactionTargetType = "report"
-	ReactionTargetComment ReactionTargetType = "comment"
+	ReactionTargetReport    ReactionTargetType = "report"
+	ReactionTargetComment   ReactionTargetType = "comment"
+	ReactionTargetForumPost ReactionTargetType = "forum_post"
 )
 
 type Reaction struct {

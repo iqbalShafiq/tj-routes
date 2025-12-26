@@ -10,13 +10,15 @@ type CommentService interface {
 	CreateComment(comment *models.Comment) error
 	GetCommentByID(id uint) (*models.Comment, error)
 	GetCommentsByReportID(reportID uint) ([]models.Comment, error)
+	GetCommentsByForumPostID(forumPostID uint) ([]models.Comment, error)
 	UpdateComment(id uint, userID uint, content string) error
 	DeleteComment(id uint, userID uint) error
 }
 
 type commentService struct {
-	commentRepo repository.CommentRepository
-	reportRepo  repository.ReportRepository
+	commentRepo    repository.CommentRepository
+	reportRepo     repository.ReportRepository
+	forumPostRepo  repository.ForumPostRepository
 }
 
 func NewCommentService(commentRepo repository.CommentRepository, reportRepo repository.ReportRepository) CommentService {
@@ -26,11 +28,31 @@ func NewCommentService(commentRepo repository.CommentRepository, reportRepo repo
 	}
 }
 
+func NewCommentServiceWithForumPost(commentRepo repository.CommentRepository, reportRepo repository.ReportRepository, forumPostRepo repository.ForumPostRepository) CommentService {
+	return &commentService{
+		commentRepo:   commentRepo,
+		reportRepo:    reportRepo,
+		forumPostRepo: forumPostRepo,
+	}
+}
+
 func (s *commentService) CreateComment(comment *models.Comment) error {
-	// Verify report exists
-	_, err := s.reportRepo.FindByID(comment.ReportID)
-	if err != nil {
-		return errors.New("report not found")
+	// Verify either report or forum post exists
+	if comment.ReportID != nil {
+		_, err := s.reportRepo.FindByID(*comment.ReportID)
+		if err != nil {
+			return errors.New("report not found")
+		}
+	} else if comment.ForumPostID != nil {
+		if s.forumPostRepo == nil {
+			return errors.New("forum post repository not available")
+		}
+		_, err := s.forumPostRepo.FindByID(*comment.ForumPostID)
+		if err != nil {
+			return errors.New("forum post not found")
+		}
+	} else {
+		return errors.New("comment must be associated with either a report or forum post")
 	}
 
 	// If parent_id is set, verify parent comment exists
@@ -45,12 +67,22 @@ func (s *commentService) CreateComment(comment *models.Comment) error {
 		return err
 	}
 
-	// Update report comment count
-	report, err := s.reportRepo.FindByID(comment.ReportID)
-	if err == nil {
-		count, _ := s.commentRepo.CountByReportID(comment.ReportID)
-		report.CommentCount = int(count)
-		s.reportRepo.Update(report)
+	// Update comment count
+	if comment.ReportID != nil {
+		report, err := s.reportRepo.FindByID(*comment.ReportID)
+		if err == nil {
+			count, _ := s.commentRepo.CountByReportID(*comment.ReportID)
+			report.CommentCount = int(count)
+			s.reportRepo.Update(report)
+		}
+	} else if comment.ForumPostID != nil && s.forumPostRepo != nil {
+		forumPost, err := s.forumPostRepo.FindByID(*comment.ForumPostID)
+		if err == nil {
+			return nil // Continue even if update fails
+		}
+		count, _ := s.commentRepo.CountByForumPostID(*comment.ForumPostID)
+		forumPost.CommentCount = int(count)
+		s.forumPostRepo.Update(forumPost)
 	}
 
 	return nil
@@ -62,6 +94,13 @@ func (s *commentService) GetCommentByID(id uint) (*models.Comment, error) {
 
 func (s *commentService) GetCommentsByReportID(reportID uint) ([]models.Comment, error) {
 	return s.commentRepo.FindThreadedByReportID(reportID)
+}
+
+func (s *commentService) GetCommentsByForumPostID(forumPostID uint) ([]models.Comment, error) {
+	if s.forumPostRepo == nil {
+		return nil, errors.New("forum post repository not available")
+	}
+	return s.commentRepo.FindThreadedByForumPostID(forumPostID)
 }
 
 func (s *commentService) UpdateComment(id uint, userID uint, content string) error {

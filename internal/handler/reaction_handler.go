@@ -134,3 +134,58 @@ func (h *ReactionHandler) RemoveReactionFromComment(c *gin.Context) {
 	MessageResponse(c, http.StatusOK, "Reaction removed successfully")
 }
 
+func (h *ReactionHandler) ReactToForumPost(c *gin.Context) {
+	forumPostID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	var req ReactRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		Unauthorized(c, err)
+		return
+	}
+
+	var reactionType models.ReactionType
+	if req.Type == "upvote" {
+		reactionType = models.ReactionUpvote
+	} else {
+		reactionType = models.ReactionDownvote
+	}
+
+	if err := h.reactionService.ToggleReaction(userID.(uint), models.ReactionTargetForumPost, uint(forumPostID), reactionType); err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	MessageResponse(c, http.StatusOK, "Reaction updated successfully")
+}
+
+func (h *ReactionHandler) RemoveReactionFromForumPost(c *gin.Context) {
+	forumPostID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		Unauthorized(c, err)
+		return
+	}
+
+	if err := h.reactionService.RemoveReaction(userID.(uint), models.ReactionTargetForumPost, uint(forumPostID)); err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	MessageResponse(c, http.StatusOK, "Reaction removed successfully")
+}
+

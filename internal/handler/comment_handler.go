@@ -66,8 +66,9 @@ func (h *CommentHandler) CreateComment(c *gin.Context) {
 		return
 	}
 
+	reportIDUint := uint(reportID)
 	comment := &models.Comment{
-		ReportID: uint(reportID),
+		ReportID: &reportIDUint,
 		UserID:   userID.(uint),
 		Content:  req.Content,
 		ParentID: req.ParentID,
@@ -131,5 +132,60 @@ func (h *CommentHandler) DeleteComment(c *gin.Context) {
 	}
 
 	MessageResponse(c, http.StatusOK, "Comment deleted successfully")
+}
+
+func (h *CommentHandler) GetCommentsByForumPost(c *gin.Context) {
+	forumPostID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	comments, err := h.commentService.GetCommentsByForumPostID(uint(forumPostID))
+	if err != nil {
+		InternalServerError(c, err)
+		return
+	}
+
+	SuccessResponse(c, http.StatusOK, gin.H{
+		"comments": comments,
+	})
+}
+
+func (h *CommentHandler) CreateCommentOnForumPost(c *gin.Context) {
+	forumPostID, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	var req CreateCommentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	userID, exists := c.Get("user_id")
+	if !exists {
+		Unauthorized(c, err)
+		return
+	}
+
+	comment := &models.Comment{
+		ForumPostID: func() *uint { id := uint(forumPostID); return &id }(),
+		UserID:      userID.(uint),
+		Content:    req.Content,
+		ParentID:    req.ParentID,
+	}
+
+	if err := h.commentService.CreateComment(comment); err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	// Reload comment with user data
+	comment, _ = h.commentService.GetCommentByID(comment.ID)
+
+	SuccessResponse(c, http.StatusCreated, comment)
 }
 

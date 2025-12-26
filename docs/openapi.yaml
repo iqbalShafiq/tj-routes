@@ -52,6 +52,10 @@ tags:
     description: Hashtag management and trending hashtags
   - name: UserFollows
     description: User follow/unfollow functionality
+  - name: Forums
+    description: Route forum management and participation
+  - name: ForumPosts
+    description: Forum post management
   - name: Health
     description: Health check endpoint
 
@@ -531,6 +535,43 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+
+  /api/v1/routes/{id}/forum:
+    get:
+      tags:
+        - Forums
+      summary: Get forum by route
+      description: Get or create forum for a specific route. **Guest accessible** (authentication optional). Forums are auto-created on first access.
+      operationId: getForumByRoute
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Route ID
+      responses:
+        "200":
+          description: Forum details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                data:
+                  forum:
+                    id: 1
+                    route_id: 1
+                    created_at: "2024-01-01T00:00:00Z"
+                    route:
+                      id: 1
+                      route_number: "1"
+                      name: "Blok M - Kota"
+                  member_count: 25
+                  is_member: false
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /api/v1/vehicles:
     get:
@@ -1739,6 +1780,524 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/forums/{id}:
+    get:
+      tags:
+        - Forums
+      summary: Get forum by ID
+      description: Get forum details by forum ID. **Guest accessible** (authentication optional).
+      operationId: getForum
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Forum details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/forums/{id}/join:
+    post:
+      tags:
+        - Forums
+      summary: Join forum
+      description: Join a forum to participate in discussions (membership required to create posts)
+      operationId: joinForum
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Successfully joined forum
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/forums/{id}/leave:
+    delete:
+      tags:
+        - Forums
+      summary: Leave forum
+      description: Leave a forum (you will no longer be able to create posts)
+      operationId: leaveForum
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Successfully left forum
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/forums/{id}/membership:
+    get:
+      tags:
+        - Forums
+      summary: Check membership status
+      description: Check if the current user is a member of the forum
+      operationId: checkMembership
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Membership status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                data:
+                  is_member: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/forums/{id}/members:
+    get:
+      tags:
+        - Forums
+      summary: Get forum members
+      description: Get paginated list of forum members. **Guest accessible** (authentication optional).
+      operationId: getForumMembers
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of forum members
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                data:
+                  members:
+                    - id: 1
+                      forum_id: 1
+                      user_id: 2
+                      created_at: "2024-01-01T00:00:00Z"
+                      user:
+                        id: 2
+                        username: "user2"
+                  total: 25
+                  page: 1
+                  limit: 20
+
+  /api/v1/forums/{id}/posts:
+    get:
+      tags:
+        - ForumPosts
+      summary: List forum posts
+      description: Get paginated list of posts in a forum. **Guest accessible** (authentication optional). Pinned posts appear first.
+      operationId: listForumPosts
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: post_type
+          in: query
+          schema:
+            type: string
+            enum: [discussion, info, question, announcement]
+          description: Filter by post type
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Search in post titles and content
+      responses:
+        "200":
+          description: List of forum posts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags:
+        - ForumPosts
+      summary: Create forum post
+      description: Create a new post in a forum (requires forum membership). Supports both JSON-only and multipart/form-data with photo and PDF uploads.
+      operationId: createForumPost
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                data:
+                  type: string
+                  description: JSON string of post data
+                  example: '{"post_type":"discussion","title":"Route 1 Discussion","content":"Let''s discuss Route 1"}'
+                photos:
+                  type: string
+                  format: binary
+                  description: Photo files (optional, multiple files supported)
+                pdfs:
+                  type: string
+                  format: binary
+                  description: PDF files (optional, multiple files supported)
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateForumPostRequest"
+      responses:
+        "201":
+          description: Post created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/forums/{id}/posts/{postId}:
+    get:
+      tags:
+        - ForumPosts
+      summary: Get forum post by ID
+      description: Get detailed information about a specific forum post. **Guest accessible** (authentication optional).
+      operationId: getForumPost
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Forum post details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags:
+        - ForumPosts
+      summary: Update forum post
+      description: Update your own forum post
+      operationId: updateForumPost
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateForumPostRequest"
+      responses:
+        "200":
+          description: Post updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    delete:
+      tags:
+        - ForumPosts
+      summary: Delete forum post
+      description: Delete your own forum post or any post (admin)
+      operationId: deleteForumPost
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Post deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/forums/{id}/posts/{postId}/pin:
+    post:
+      tags:
+        - ForumPosts
+      summary: Pin forum post
+      description: Pin a forum post to the top (Admin only)
+      operationId: pinForumPost
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Post pinned successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    delete:
+      tags:
+        - ForumPosts
+      summary: Unpin forum post
+      description: Unpin a forum post (Admin only)
+      operationId: unpinForumPost
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: postId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Post unpinned successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/forum-posts/{id}/comments:
+    get:
+      tags:
+        - Comments
+      summary: Get comments for a forum post
+      description: Get all threaded comments for a specific forum post
+      operationId: getForumPostComments
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of comments
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags:
+        - Comments
+      summary: Add comment to forum post
+      description: Add a comment to a forum post (can be a reply to another comment)
+      operationId: createForumPostComment
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCommentRequest"
+      responses:
+        "201":
+          description: Comment created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/forum-posts/{id}/react:
+    post:
+      tags:
+        - Reactions
+      summary: React to a forum post
+      description: Add or toggle an upvote/downvote reaction on a forum post
+      operationId: reactToForumPost
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReactRequest"
+      responses:
+        "200":
+          description: Reaction updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    delete:
+      tags:
+        - Reactions
+      summary: Remove reaction from forum post
+      description: Remove your reaction from a forum post
+      operationId: removeForumPostReaction
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reaction removed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /api/v1/bulk-upload/{entityType}:
     post:
       tags:
@@ -2394,7 +2953,7 @@ components:
           example: 1
         target_type:
           type: string
-          enum: [report, comment]
+          enum: [report, comment, forum_post]
           example: report
         target_id:
           type: integer
@@ -2407,6 +2966,165 @@ components:
           type: string
           format: date-time
           example: "2024-01-01T00:00:00Z"
+
+    Forum:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        route_id:
+          type: integer
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        route:
+          $ref: "#/components/schemas/Route"
+
+    ForumPost:
+      type: object
+      required:
+        - post_type
+        - title
+        - content
+      properties:
+        id:
+          type: integer
+          example: 1
+        forum_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 2
+        post_type:
+          type: string
+          enum: [discussion, info, question, announcement]
+          example: discussion
+        title:
+          type: string
+          example: "Route 1 Discussion"
+        content:
+          type: string
+          example: "Let's discuss Route 1 updates and issues"
+        linked_report_id:
+          type: integer
+          nullable: true
+          description: ID of linked report (if post references a report)
+          example: 5
+        is_pinned:
+          type: boolean
+          default: false
+          example: false
+        photo_urls:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: Array of photo URLs
+          example:
+            ["http://localhost:8080/uploads/forum-posts/1/photo_1234567890.jpg"]
+        pdf_urls:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: Array of PDF document URLs
+          example:
+            [
+              "http://localhost:8080/uploads/forum-posts/1/document_1234567890.pdf",
+            ]
+        upvotes:
+          type: integer
+          default: 0
+          example: 10
+        downvotes:
+          type: integer
+          default: 0
+          example: 1
+        comment_count:
+          type: integer
+          default: 0
+          example: 5
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        user:
+          $ref: "#/components/schemas/User"
+        forum:
+          $ref: "#/components/schemas/Forum"
+        linked_report:
+          $ref: "#/components/schemas/Report"
+
+    ForumMember:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        forum_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 2
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        user:
+          $ref: "#/components/schemas/User"
+
+    CreateForumPostRequest:
+      type: object
+      required:
+        - post_type
+        - title
+        - content
+      properties:
+        post_type:
+          type: string
+          enum: [discussion, info, question, announcement]
+          example: discussion
+        title:
+          type: string
+          example: "Route 1 Discussion"
+        content:
+          type: string
+          example: "Let's discuss Route 1 updates"
+        linked_report_id:
+          type: integer
+          nullable: true
+          example: 5
+
+    UpdateForumPostRequest:
+      type: object
+      required:
+        - title
+        - content
+      properties:
+        title:
+          type: string
+          example: "Updated Route 1 Discussion"
+        content:
+          type: string
+          example: "Updated discussion content"
+        post_type:
+          type: string
+          nullable: true
+          enum: [discussion, info, question, announcement]
+          example: discussion
 
     ReactRequest:
       type: object
@@ -2435,7 +3153,13 @@ components:
           example: "🎯"
         criteria_type:
           type: string
-          enum: [reports_accepted, comments_made, upvotes_received, reputation_points]
+          enum:
+            [
+              reports_accepted,
+              comments_made,
+              upvotes_received,
+              reputation_points,
+            ]
           example: reports_accepted
         criteria_value:
           type: integer

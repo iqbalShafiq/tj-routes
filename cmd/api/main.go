@@ -189,6 +189,9 @@ func main() {
 	userBadgeRepo := repository.NewUserBadgeRepository(db)
 	userFollowRepo := repository.NewUserFollowRepository(db)
 	hashtagRepo := repository.NewHashtagRepository(db)
+	forumRepo := repository.NewForumRepository(db)
+	forumPostRepo := repository.NewForumPostRepository(db)
+	forumMemberRepo := repository.NewForumMemberRepository(db)
 
 	// Initialize file storage (needed for bulk upload service and handlers)
 	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.Host, cfg.Server.Port)
@@ -243,9 +246,13 @@ func main() {
 		badgeService,
 	)
 	
-	// Initialize comment and reaction services
-	commentService := service.NewCommentService(commentRepo, reportRepo)
-	reactionService := service.NewReactionService(reactionRepo, reportRepo, commentRepo, reputationService)
+	// Initialize forum services
+	forumService := service.NewForumService(forumRepo, forumMemberRepo, routeRepo)
+	forumPostService := service.NewForumPostService(forumPostRepo, forumRepo, forumMemberRepo, reportRepo)
+	
+	// Initialize comment and reaction services (with forum post support)
+	commentService := service.NewCommentServiceWithForumPost(commentRepo, reportRepo, forumPostRepo)
+	reactionService := service.NewReactionServiceWithForumPost(reactionRepo, reportRepo, commentRepo, forumPostRepo, reputationService)
 
 	// Initialize bulk upload service
 	var bulkUploadService service.BulkUploadService
@@ -317,6 +324,8 @@ func main() {
 	userFollowHandler := handler.NewUserFollowHandler(userFollowService)
 	hashtagHandler := handler.NewHashtagHandler(hashtagService)
 	reportCategoryHandler := handler.NewReportCategoryHandler(reportCategoryService)
+	forumHandler := handler.NewForumHandler(forumService)
+	forumPostHandler := handler.NewForumPostHandler(forumPostService, fileStorage)
 
 	// Initialize bulk upload handler (always create, even if service is nil)
 	// This ensures routes are registered, but will return error if service unavailable
@@ -474,6 +483,7 @@ func main() {
 			{
 				routes.GET("", routeHandler.ListRoutes)
 				routes.GET("/:id", routeHandler.GetRoute)
+				routes.GET("/:id/forum", forumHandler.GetForumByRoute)
 			}
 
 			// Vehicles (read for guests, write requires auth+admin)
@@ -509,6 +519,15 @@ func main() {
 			reportCategories := public.Group("/report-categories")
 			{
 				reportCategories.GET("", reportCategoryHandler.ListCategories)
+			}
+
+			// Forums (public viewing)
+			forums := public.Group("/forums")
+			{
+				forums.GET("/:id", forumHandler.GetForum)
+				forums.GET("/:id/posts", forumPostHandler.ListPosts)
+				forums.GET("/:id/posts/:postId", forumPostHandler.GetPost)
+				forums.GET("/:id/members", forumHandler.GetForumMembers)
 			}
 		}
 
@@ -618,6 +637,34 @@ func main() {
 				bulkUpload.POST("/:entityType", bulkUploadHandler.UploadCSV)
 				bulkUpload.GET("/:id", bulkUploadHandler.GetUploadStatus)
 				bulkUpload.GET("", bulkUploadHandler.ListUploads)
+			}
+
+			// Forums (protected participation)
+			forums := protected.Group("/forums")
+			{
+				forums.POST("/:id/join", forumHandler.JoinForum)
+				forums.DELETE("/:id/leave", forumHandler.LeaveForum)
+				forums.GET("/:id/membership", forumHandler.CheckMembership)
+				
+				forumPosts := forums.Group("/:id/posts")
+				{
+					forumPosts.POST("", forumPostHandler.CreatePost)
+					forumPosts.PUT("/:postId", forumPostHandler.UpdatePost)
+					forumPosts.DELETE("/:postId", forumPostHandler.DeletePost)
+					forumPosts.POST("/:postId/pin", middleware.RequireAdmin(), forumPostHandler.PinPost)
+					forumPosts.DELETE("/:postId/pin", middleware.RequireAdmin(), forumPostHandler.UnpinPost)
+				}
+			}
+
+			// Forum post comments
+			forumPosts := protected.Group("/forum-posts")
+			{
+				forumPosts.GET("/:id/comments", commentHandler.GetCommentsByForumPost)
+				forumPosts.POST("/:id/comments", commentHandler.CreateCommentOnForumPost)
+				
+				// Forum post reactions
+				forumPosts.POST("/:id/react", reactionHandler.ReactToForumPost)
+				forumPosts.DELETE("/:id/react", reactionHandler.RemoveReactionFromForumPost)
 			}
 		}
 	}

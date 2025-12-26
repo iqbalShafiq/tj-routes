@@ -107,6 +107,9 @@ func main() {
 	hashtagRepo := repository.NewHashtagRepository(db)
 	userFollowRepo := repository.NewUserFollowRepository(db)
 	bulkUploadLogRepo := repository.NewBulkUploadLogRepository(db)
+	forumRepo := repository.NewForumRepository(db)
+	forumPostRepo := repository.NewForumPostRepository(db)
+	forumMemberRepo := repository.NewForumMemberRepository(db)
 
 	// Seed badges first
 	if err := seedBadges(badgeRepo); err != nil {
@@ -151,6 +154,11 @@ func main() {
 	// Seed route changes
 	if err := seedRouteChanges(db, routeChangeRepo, routeRepo, userRepo, stopRepo); err != nil {
 		log.Fatalf("Failed to seed route changes: %v", err)
+	}
+
+	// Seed forums
+	if err := seedForums(db, forumRepo, routeRepo, forumPostRepo, forumMemberRepo, userRepo); err != nil {
+		log.Fatalf("Failed to seed forums: %v", err)
 	}
 
 	// Seed user badges
@@ -752,8 +760,9 @@ func seedComments(db *gorm.DB, commentRepo repository.CommentRepository, reportR
 		upvotes := rng.Intn(20)
 		downvotes := rng.Intn(5)
 
+		reportID := report.ID
 		comment := &models.Comment{
-			ReportID:  report.ID,
+			ReportID:  &reportID,
 			UserID:    user.ID,
 			ParentID:  parentID,
 			Content:   content,
@@ -1966,4 +1975,126 @@ func seedBulkUploadLogs(bulkUploadLogRepo repository.BulkUploadLogRepository, us
 
 	fmt.Printf("  ✓ Created %d bulk upload logs\n", createdCount)
 	return nil
+}
+
+func seedForums(db *gorm.DB, forumRepo repository.ForumRepository, routeRepo repository.RouteRepository, forumPostRepo repository.ForumPostRepository, forumMemberRepo repository.ForumMemberRepository, userRepo repository.UserRepository) error {
+	fmt.Println("\n🌐 Seeding forums...")
+
+	// Get all routes
+	routes, _, err := routeRepo.List(0, 100, map[string]interface{}{})
+	if err != nil {
+		return err
+	}
+
+	if len(routes) == 0 {
+		fmt.Println("  ⚠ No routes found, skipping forum seeding")
+		return nil
+	}
+
+	// Get some users for membership and posts
+	users, _, err := userRepo.List(0, 20)
+	if err != nil {
+		return err
+	}
+
+	if len(users) == 0 {
+		fmt.Println("  ⚠ No users found, skipping forum seeding")
+		return nil
+	}
+
+	createdForums := 0
+	createdPosts := 0
+	createdMembers := 0
+
+	// Create forums for first 10 routes
+	maxForums := 10
+	if len(routes) < maxForums {
+		maxForums = len(routes)
+	}
+
+	for i := 0; i < maxForums; i++ {
+		route := routes[i]
+
+		// Create forum
+		forum := &models.Forum{
+			RouteID: route.ID,
+		}
+		if err := forumRepo.Create(forum); err != nil {
+			fmt.Printf("  ⚠ Warning: Failed to create forum for route %d: %v\n", route.ID, err)
+			continue
+		}
+
+		createdForums++
+
+		// Add some members (first 5-8 users)
+		memberCount := 5 + (i % 4) // 5-8 members per forum
+		if memberCount > len(users) {
+			memberCount = len(users)
+		}
+
+		for j := 0; j < memberCount; j++ {
+			member := &models.ForumMember{
+				ForumID: forum.ID,
+				UserID:  users[j].ID,
+			}
+			if err := forumMemberRepo.Create(member); err != nil {
+				continue // Skip if already member
+			}
+			createdMembers++
+		}
+
+		// Create some posts (2-4 posts per forum)
+		postCount := 2 + (i % 3) // 2-4 posts
+		postTypes := []models.PostType{
+			models.PostTypeDiscussion,
+			models.PostTypeInfo,
+			models.PostTypeQuestion,
+			models.PostTypeAnnouncement,
+		}
+
+		for j := 0; j < postCount; j++ {
+			postUser := users[j%len(users)]
+			postType := postTypes[j%len(postTypes)]
+
+			post := &models.ForumPost{
+				ForumID:  forum.ID,
+				UserID:   postUser.ID,
+				PostType: postType,
+				Title:    fmt.Sprintf("%s - %s %d", route.Name, getPostTypeTitle(postType), j+1),
+				Content:  fmt.Sprintf("This is a %s post about %s. Route number: %s", postType, route.Name, route.RouteNumber),
+			}
+
+			// First post in first forum should be pinned
+			if i == 0 && j == 0 {
+				post.IsPinned = true
+			}
+
+			if err := forumPostRepo.Create(post); err != nil {
+				fmt.Printf("  ⚠ Warning: Failed to create post: %v\n", err)
+				continue
+			}
+
+			createdPosts++
+		}
+	}
+
+	fmt.Printf("  ✓ Created %d forums\n", createdForums)
+	fmt.Printf("  ✓ Created %d forum posts\n", createdPosts)
+	fmt.Printf("  ✓ Created %d forum memberships\n", createdMembers)
+	return nil
+}
+
+func getPostTypeTitle(postType models.PostType) string {
+	switch postType {
+	case models.PostTypeDiscussion:
+		return "Discussion"
+	case models.PostTypeInfo:
+		return "Information"
+	case models.PostTypeQuestion:
+		return "Question"
+	case models.PostTypeAnnouncement:
+		return "Announcement"
+	default:
+		return "Post"
+	}
 }

@@ -14,6 +14,7 @@ type ForumPostRepository interface {
 	ListByForumID(forumID uint, offset, limit int, filters map[string]interface{}) ([]models.ForumPost, int64, error)
 	CountByForumID(forumID uint) (int64, error)
 	IncrementCommentCount(postID uint) error
+	GetRecentByForumID(forumID uint, limit int) ([]models.ForumPost, error)
 }
 
 type forumPostRepository struct {
@@ -91,5 +92,16 @@ func (r *forumPostRepository) IncrementCommentCount(postID uint) error {
 	return r.db.Model(&models.ForumPost{}).
 		Where("id = ?", postID).
 		UpdateColumn("comment_count", gorm.Expr("comment_count + 1")).Error
+}
+
+func (r *forumPostRepository) GetRecentByForumID(forumID uint, limit int) ([]models.ForumPost, error) {
+	var posts []models.ForumPost
+
+	err := r.db.Where("forum_id = ? AND deleted_at IS NULL", forumID).
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&posts).Error
+
+	return posts, err
 }
 

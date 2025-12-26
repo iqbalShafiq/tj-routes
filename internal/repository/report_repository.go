@@ -16,6 +16,7 @@ type ReportRepository interface {
 	GetFeed(offset, limit int, filters map[string]interface{}, sort string) ([]models.Report, int64, error)
 	GetTrending(offset, limit int, timeWindow string) ([]models.Report, int64, error)
 	GetStories(userID *uint, limit int) ([]models.Report, error)
+	GetRecentByRouteID(routeID uint, limit int) ([]models.Report, error)
 }
 
 type reportRepository struct {
@@ -229,6 +230,17 @@ func (r *reportRepository) GetStories(userID *uint, limit int) ([]models.Report,
 
 	err := query.Order("created_at DESC").
 		Preload("User").
+		Limit(limit).
+		Find(&reports).Error
+
+	return reports, err
+}
+
+func (r *reportRepository) GetRecentByRouteID(routeID uint, limit int) ([]models.Report, error) {
+	var reports []models.Report
+
+	err := r.db.Where("related_route_id = ? AND deleted_at IS NULL", routeID).
+		Order("created_at DESC").
 		Limit(limit).
 		Find(&reports).Error
 

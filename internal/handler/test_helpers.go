@@ -157,6 +157,7 @@ func setupTestRouter(db *gorm.DB, cfg *config.Config) *gin.Engine {
 	reactionRepo := repository.NewReactionRepository(db)
 	badgeRepo := repository.NewBadgeRepository(db)
 	userBadgeRepo := repository.NewUserBadgeRepository(db)
+	forumPostRepo := repository.NewForumPostRepository(db)
 
 	// Initialize file storage
 	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.Host, cfg.Server.Port)
@@ -165,7 +166,7 @@ func setupTestRouter(db *gorm.DB, cfg *config.Config) *gin.Engine {
 	// Initialize services
 	userService := service.NewUserService(userRepo, cfg, cacheInstance)
 	stopService := service.NewStopService(stopRepo, cacheInstance, cfg)
-	routeService := service.NewRouteService(routeRepo, routeStopRepo, stopRepo, routeChangeRepo, cacheInstance, cfg)
+	routeService := service.NewRouteService(routeRepo, routeStopRepo, stopRepo, routeChangeRepo, reportRepo, forumPostRepo, cacheInstance, cfg)
 	vehicleService := service.NewVehicleService(vehicleRepo, routeRepo, cacheInstance, cfg)
 	reputationService := service.NewReputationService(userRepo)
 	badgeService := service.NewBadgeService(badgeRepo, userBadgeRepo, userRepo, reportRepo, commentRepo, reactionRepo)

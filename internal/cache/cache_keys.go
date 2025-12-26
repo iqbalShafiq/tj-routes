@@ -12,6 +12,11 @@ func RouteKey(id uint) string {
 	return fmt.Sprintf("route:%d", id)
 }
 
+// RouteStatsKey generates a cache key for route statistics
+func RouteStatsKey(id uint) string {
+	return fmt.Sprintf("route:stats:%d", id)
+}
+
 // RouteListKey generates a cache key for route list with filters
 func RouteListKey(page, limit int, status, routeNumber, search string) string {
 	return fmt.Sprintf("route:list:%d:%d:%s:%s:%s", page, limit, status, routeNumber, search)

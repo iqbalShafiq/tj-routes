@@ -219,7 +219,7 @@ func main() {
 	// Initialize services with cache
 	userService := service.NewUserService(userRepo, cfg, cacheInstance)
 	stopService := service.NewStopService(stopRepo, cacheInstance, cfg)
-	routeService := service.NewRouteService(routeRepo, routeStopRepo, stopRepo, routeChangeRepo, cacheInstance, cfg)
+	routeService := service.NewRouteService(routeRepo, routeStopRepo, stopRepo, routeChangeRepo, reportRepo, forumPostRepo, cacheInstance, cfg)
 	vehicleService := service.NewVehicleService(vehicleRepo, routeRepo, cacheInstance, cfg)
 	
 	// Initialize reputation and badge services

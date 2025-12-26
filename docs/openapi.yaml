@@ -417,7 +417,7 @@ paths:
       tags:
         - Routes
       summary: Get route by ID
-      description: Get detailed information about a specific route with stops. **Guest accessible** (authentication optional)
+      description: Get detailed information about a specific route with stops. **Guest accessible** (authentication optional). Use `stats=true` to include comprehensive route statistics including reports, forum activity, and community metrics.
       operationId: getRoute
       parameters:
         - name: id
@@ -425,13 +425,20 @@ paths:
           required: true
           schema:
             type: integer
+          description: Route ID
+        - name: stats
+          in: query
+          schema:
+            type: boolean
+            default: false
+          description: Set to true to include route statistics (reports, forum activity, community metrics)
       responses:
         "200":
-          description: Route details
+          description: Route details (includes statistics if stats=true)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/RouteResponse"
+                $ref: "#/components/schemas/RouteDetailResponse"
         "404":
           $ref: "#/components/responses/NotFound"
     put:
@@ -3612,6 +3619,135 @@ components:
           example: true
         data:
           $ref: "#/components/schemas/Route"
+
+    RouteDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            route:
+              $ref: "#/components/schemas/Route"
+            statistics:
+              $ref: "#/components/schemas/RouteStatistics"
+            recent_reports:
+              type: array
+              items:
+                $ref: "#/components/schemas/ReportSummary"
+              description: Latest 3 reports for this route
+            recent_posts:
+              type: array
+              items:
+                $ref: "#/components/schemas/ForumPostSummary"
+              description: Latest 3 forum posts for this route
+
+    RouteStatistics:
+      type: object
+      properties:
+        forum_id:
+          type: integer
+          nullable: true
+          description: ID of the forum associated with this route
+          example: 1
+        total_reports:
+          type: integer
+          example: 45
+          description: Total number of reports for this route
+        reports_by_status:
+          type: object
+          additionalProperties:
+            type: integer
+          example: {"pending": 12, "reviewed": 8, "resolved": 25}
+          description: Report counts grouped by status
+        reports_by_type:
+          type: object
+          additionalProperties:
+            type: integer
+          example: {"route_issue": 30, "stop_issue": 15, "temporary_event": 0, "policy_change": 0}
+          description: Report counts grouped by type
+        total_report_upvotes:
+          type: integer
+          example: 156
+          description: Total upvotes on all reports for this route
+        total_report_downvotes:
+          type: integer
+          example: 23
+          description: Total downvotes on all reports for this route
+        forum_member_count:
+          type: integer
+          example: 89
+          description: Number of forum members
+        forum_post_count:
+          type: integer
+          example: 234
+          description: Total number of forum posts
+        total_post_upvotes:
+          type: integer
+          example: 567
+          description: Total upvotes on forum posts
+        total_post_downvotes:
+          type: integer
+          example: 45
+          description: Total downvotes on forum posts
+        report_resolution_rate:
+          type: number
+          format: double
+          example: 0.56
+          description: Percentage of reports that have been resolved (resolved / total)
+        community_activity_score:
+          type: number
+          format: double
+          example: 8.5
+          description: Computed community activity score based on posts, members, and engagement
+
+    ReportSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 45
+        type:
+          type: string
+          enum: [route_issue, stop_issue, temporary_event, policy_change]
+          example: route_issue
+        title:
+          type: string
+          example: Route 1 is delayed
+        status:
+          type: string
+          enum: [pending, reviewed, resolved]
+          example: pending
+        upvotes:
+          type: integer
+          example: 5
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+
+    ForumPostSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 89
+        post_type:
+          type: string
+          enum: [discussion, info, question, announcement]
+          example: discussion
+        title:
+          type: string
+          example: Schedule change?
+        upvotes:
+          type: integer
+          example: 12
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
 
     VehicleResponse:
       type: object

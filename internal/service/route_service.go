@@ -8,6 +8,7 @@ import (
 
 	"tj-routes/internal/cache"
 	"tj-routes/internal/config"
+	"tj-routes/internal/dto"
 	"tj-routes/internal/models"
 	"tj-routes/internal/repository"
 )
@@ -15,6 +16,7 @@ import (
 type RouteService interface {
 	CreateRoute(route *models.Route, stopIDs []uint, userID uint) error
 	GetRouteByID(id uint) (*models.Route, error)
+	GetRouteWithStats(id uint) (*dto.RouteDetailResponse, error)
 	UpdateRoute(route *models.Route) error
 	UpdateRouteStops(routeID uint, stopIDs []uint, userID uint) error
 	DeleteRoute(id uint) error
@@ -22,12 +24,14 @@ type RouteService interface {
 }
 
 type routeService struct {
-	routeRepo      repository.RouteRepository
-	routeStopRepo  repository.RouteStopRepository
-	stopRepo       repository.StopRepository
+	routeRepo       repository.RouteRepository
+	routeStopRepo   repository.RouteStopRepository
+	stopRepo        repository.StopRepository
 	routeChangeRepo repository.RouteChangeRepository
-	cache          cache.Cache
-	config         *config.Config
+	reportRepo      repository.ReportRepository
+	forumPostRepo   repository.ForumPostRepository
+	cache           cache.Cache
+	config          *config.Config
 }
 
 func NewRouteService(
@@ -35,16 +39,20 @@ func NewRouteService(
 	routeStopRepo repository.RouteStopRepository,
 	stopRepo repository.StopRepository,
 	routeChangeRepo repository.RouteChangeRepository,
+	reportRepo repository.ReportRepository,
+	forumPostRepo repository.ForumPostRepository,
 	cacheInstance cache.Cache,
 	cfg *config.Config,
 ) RouteService {
 	return &routeService{
-		routeRepo:      routeRepo,
-		routeStopRepo:  routeStopRepo,
-		stopRepo:       stopRepo,
+		routeRepo:       routeRepo,
+		routeStopRepo:   routeStopRepo,
+		stopRepo:        stopRepo,
 		routeChangeRepo: routeChangeRepo,
-		cache:          cacheInstance,
-		config:         cfg,
+		reportRepo:      reportRepo,
+		forumPostRepo:   forumPostRepo,
+		cache:           cacheInstance,
+		config:          cfg,
 	}
 }
 
@@ -122,6 +130,66 @@ func (s *routeService) GetRouteByID(id uint) (*models.Route, error) {
 	return routePtr, nil
 }
 
+func (s *routeService) GetRouteWithStats(id uint) (*dto.RouteDetailResponse, error) {
+	ctx := context.Background()
+	key := cache.RouteStatsKey(id)
+
+	// Try to get from cache
+	var response dto.RouteDetailResponse
+	if err := s.cache.Get(ctx, key, &response); err == nil {
+		return &response, nil
+	}
+
+	// Cache miss, get route with stats from database
+	route, stats, err := s.routeRepo.GetRouteWithStats(id)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build response
+	response.Route = route
+	response.Statistics = *stats
+
+	// Get recent reports for this route
+	recentReports, err := s.reportRepo.GetRecentByRouteID(id, 3)
+	if err == nil {
+		response.RecentReports = make([]dto.ReportSummary, len(recentReports))
+		for i, r := range recentReports {
+			response.RecentReports[i] = dto.ReportSummary{
+				ID:        r.ID,
+				Type:      string(r.Type),
+				Title:     r.Title,
+				Status:    string(r.Status),
+				Upvotes:   r.Upvotes,
+				CreatedAt: r.CreatedAt,
+			}
+		}
+	}
+
+	// Get recent forum posts if forum exists
+	if stats.ForumID != nil && *stats.ForumID > 0 {
+		recentPosts, err := s.forumPostRepo.GetRecentByForumID(*stats.ForumID, 3)
+		if err == nil {
+			response.RecentPosts = make([]dto.ForumPostSummary, len(recentPosts))
+			for i, p := range recentPosts {
+				response.RecentPosts[i] = dto.ForumPostSummary{
+					ID:        p.ID,
+					PostType:  string(p.PostType),
+					Title:     p.Title,
+					Upvotes:   p.Upvotes,
+					CreatedAt: p.CreatedAt,
+				}
+			}
+		}
+	}
+
+	// Store in cache with shorter TTL for stats (5 minutes)
+	ttl := 5 * time.Minute
+	s.cache.Set(ctx, key, response, ttl)
+
+	return &response, nil
+}
+
 func (s *routeService) UpdateRoute(route *models.Route) error {
 	if err := s.routeRepo.Update(route); err != nil {
 		return err
@@ -130,6 +198,7 @@ func (s *routeService) UpdateRoute(route *models.Route) error {
 	// Invalidate cache
 	ctx := context.Background()
 	s.cache.Delete(ctx, cache.RouteKey(route.ID))
+	s.cache.Delete(ctx, cache.RouteStatsKey(route.ID))
 	s.cache.InvalidatePattern(ctx, cache.RoutePattern())
 
 	return nil
@@ -202,6 +271,7 @@ func (s *routeService) UpdateRouteStops(routeID uint, stopIDs []uint, userID uin
 	// Invalidate cache
 	ctx := context.Background()
 	s.cache.Delete(ctx, cache.RouteKey(routeID))
+	s.cache.Delete(ctx, cache.RouteStatsKey(routeID))
 	s.cache.InvalidatePattern(ctx, cache.RoutePattern())
 
 	return nil
@@ -219,6 +289,7 @@ func (s *routeService) DeleteRoute(id uint) error {
 	// Invalidate cache
 	ctx := context.Background()
 	s.cache.Delete(ctx, cache.RouteKey(id))
+	s.cache.Delete(ctx, cache.RouteStatsKey(id))
 	s.cache.InvalidatePattern(ctx, cache.RoutePattern())
 
 	return nil

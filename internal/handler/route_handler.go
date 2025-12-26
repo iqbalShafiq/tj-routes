@@ -69,6 +69,19 @@ func (h *RouteHandler) GetRoute(c *gin.Context) {
 		return
 	}
 
+	// Check if client wants statistics
+	includeStats := c.Query("stats") == "true"
+
+	if includeStats {
+		response, err := h.routeService.GetRouteWithStats(uint(id))
+		if err != nil {
+			NotFound(c, err)
+			return
+		}
+		SuccessResponse(c, http.StatusOK, response)
+		return
+	}
+
 	route, err := h.routeService.GetRouteByID(uint(id))
 	if err != nil {
 		NotFound(c, err)

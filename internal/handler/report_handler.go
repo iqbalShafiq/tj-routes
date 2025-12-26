@@ -60,6 +60,9 @@ func (h *ReportHandler) ListReports(c *gin.Context) {
 	if reportType := c.Query("type"); reportType != "" {
 		filters["type"] = models.ReportType(reportType)
 	}
+	if category := c.Query("category"); category != "" {
+		filters["category"] = category
+	}
 	if search := c.Query("search"); search != "" {
 		filters["search"] = search
 	}
@@ -307,6 +310,9 @@ func (h *ReportHandler) GetPublicFeed(c *gin.Context) {
 	if hashtag != "" {
 		filters["hashtag"] = hashtag
 	}
+	if category := c.Query("category"); category != "" {
+		filters["category"] = category
+	}
 	if followedStr == "true" && userID != nil {
 		filters["followed"] = true
 	}
@@ -405,6 +411,7 @@ func (h *ReportHandler) enhanceReports(c *gin.Context, reports []models.Report) 
 			"related_route_id": report.RelatedRouteID,
 			"related_stop_id":  report.RelatedStopID,
 			"status":         report.Status,
+			"category":       report.Category,
 			"upvotes":        report.Upvotes,
 			"downvotes":      report.Downvotes,
 			"comment_count":  report.CommentCount,

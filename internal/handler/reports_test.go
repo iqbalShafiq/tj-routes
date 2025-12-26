@@ -68,6 +68,24 @@ func TestCreateReport(t *testing.T) {
 		assert.True(t, response.Success)
 	})
 
+	t.Run("create report with category", func(t *testing.T) {
+		reqBody := map[string]interface{}{
+			"type":        "route_issue",
+			"title":       "Report with Category",
+			"description": "This report has a category",
+			"category":    "Crash",
+		}
+
+		w := makeRequest(router, "POST", "/api/v1/reports", reqBody, userToken)
+
+		assert.Equal(t, http.StatusCreated, w.Code)
+
+		var response Response
+		err := json.Unmarshal(w.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.True(t, response.Success)
+	})
+
 	t.Run("create report with missing required fields", func(t *testing.T) {
 		reqBody := map[string]interface{}{
 			"title": "Incomplete Report",

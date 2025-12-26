@@ -180,6 +180,7 @@ func main() {
 	routeStopRepo := repository.NewRouteStopRepository(db)
 	vehicleRepo := repository.NewVehicleRepository(db)
 	reportRepo := repository.NewReportRepository(db)
+	reportCategoryRepo := repository.NewReportCategoryRepository(db)
 	routeChangeRepo := repository.NewRouteChangeRepository(db)
 	bulkUploadLogRepo := repository.NewBulkUploadLogRepository(db)
 	commentRepo := repository.NewCommentRepository(db)
@@ -227,6 +228,9 @@ func main() {
 	
 	// Initialize hashtag service
 	hashtagService := service.NewHashtagService(hashtagRepo)
+	
+	// Initialize report category service
+	reportCategoryService := service.NewReportCategoryService(reportCategoryRepo)
 	
 	// Initialize report service with social features (hashtags, follows, reputation)
 	reportService := service.NewReportServiceWithSocial(
@@ -312,6 +316,7 @@ func main() {
 	leaderboardHandler := handler.NewLeaderboardHandler(userRepo, badgeService, reputationService)
 	userFollowHandler := handler.NewUserFollowHandler(userFollowService)
 	hashtagHandler := handler.NewHashtagHandler(hashtagService)
+	reportCategoryHandler := handler.NewReportCategoryHandler(reportCategoryService)
 
 	// Initialize bulk upload handler (always create, even if service is nil)
 	// This ensures routes are registered, but will return error if service unavailable
@@ -499,6 +504,12 @@ func main() {
 				hashtags.GET("/search", hashtagHandler.SearchHashtags)
 				hashtags.GET("/:name/reports", hashtagHandler.GetReportsByHashtag)
 			}
+
+			// Report Categories (public read access)
+			reportCategories := public.Group("/report-categories")
+			{
+				reportCategories.GET("", reportCategoryHandler.ListCategories)
+			}
 		}
 
 		// Protected routes (require authentication)
@@ -590,6 +601,13 @@ func main() {
 					adminUsers.GET("/:id", userHandler.GetUser)
 					adminUsers.PUT("/:id/role", userHandler.UpdateUserRole)
 				}
+			}
+
+			// Report Categories (admin create)
+			reportCategories := protected.Group("/report-categories")
+			reportCategories.Use(middleware.RequireAdmin())
+			{
+				reportCategories.POST("", reportCategoryHandler.CreateCategory)
 			}
 
 			// Bulk upload (admin only)

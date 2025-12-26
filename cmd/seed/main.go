@@ -100,6 +100,7 @@ func main() {
 	userBadgeRepo := repository.NewUserBadgeRepository(db)
 	vehicleRepo := repository.NewVehicleRepository(db)
 	reportRepo := repository.NewReportRepository(db)
+	reportCategoryRepo := repository.NewReportCategoryRepository(db)
 	commentRepo := repository.NewCommentRepository(db)
 	reactionRepo := repository.NewReactionRepository(db)
 	routeChangeRepo := repository.NewRouteChangeRepository(db)
@@ -110,6 +111,11 @@ func main() {
 	// Seed badges first
 	if err := seedBadges(badgeRepo); err != nil {
 		log.Fatalf("Failed to seed badges: %v", err)
+	}
+
+	// Seed report categories
+	if err := seedReportCategories(reportCategoryRepo); err != nil {
+		log.Fatalf("Failed to seed report categories: %v", err)
 	}
 
 	// Seed users
@@ -326,6 +332,61 @@ func seedBadges(badgeRepo repository.BadgeRepository) error {
 		}
 
 		fmt.Printf("  ✓ Created badge: %s\n", badge.Name)
+	}
+
+	return nil
+}
+
+func seedReportCategories(categoryRepo repository.ReportCategoryRepository) error {
+	desc1 := "Vehicle accidents or crashes"
+	desc2 := "Litter or garbage issues"
+	desc3 := "Malfunctioning or broken buses"
+	desc4 := "Potholes, cracks, or other road damage"
+	desc5 := "Traffic congestion or flow problems"
+	desc6 := "Safety-related issues or hazards"
+	desc7 := "Other types of issues not covered above"
+
+	categories := []models.ReportCategory{
+		{
+			Name:        "Crash",
+			Description: &desc1,
+		},
+		{
+			Name:        "Trash",
+			Description: &desc2,
+		},
+		{
+			Name:        "Broken Bus",
+			Description: &desc3,
+		},
+		{
+			Name:        "Road Damage",
+			Description: &desc4,
+		},
+		{
+			Name:        "Traffic Issue",
+			Description: &desc5,
+		},
+		{
+			Name:        "Safety Concern",
+			Description: &desc6,
+		},
+		{
+			Name:        "Other",
+			Description: &desc7,
+		},
+	}
+
+	for _, category := range categories {
+		// Check if category already exists
+		existing, err := categoryRepo.FindByName(category.Name)
+		if err == nil && existing != nil {
+			continue // Category already exists, skip
+		}
+
+		if err := categoryRepo.Create(&category); err != nil {
+			return fmt.Errorf("failed to create category %s: %w", category.Name, err)
+		}
 	}
 
 	return nil

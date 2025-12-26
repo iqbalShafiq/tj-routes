@@ -65,6 +65,9 @@ func (r *reportRepository) List(offset, limit int, filters map[string]interface{
 	if reportType, ok := filters["type"].(models.ReportType); ok {
 		query = query.Where("type = ?", reportType)
 	}
+	if category, ok := filters["category"].(string); ok && category != "" {
+		query = query.Where("category = ?", category)
+	}
 
 	// Fuzzy search using pg_trgm with similarity threshold and ILIKE for partial matching
 	if search, ok := filters["search"].(string); ok && search != "" {
@@ -128,6 +131,9 @@ func (r *reportRepository) GetFeed(offset, limit int, filters map[string]interfa
 	// Status filter (default: show all except deleted)
 	if status, ok := filters["status"].(models.ReportStatus); ok {
 		query = query.Where("status = ?", status)
+	}
+	if category, ok := filters["category"].(string); ok && category != "" {
+		query = query.Where("category = ?", category)
 	}
 
 	if err := query.Count(&total).Error; err != nil {

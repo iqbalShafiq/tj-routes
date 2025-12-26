@@ -737,6 +737,11 @@ paths:
           schema:
             type: string
             enum: [route_issue, stop_issue, temporary_event, policy_change]
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by category name
         - name: search
           in: query
           description: Fuzzy search term to match against report title or description. Supports typo tolerance.
@@ -768,7 +773,7 @@ paths:
                 data:
                   type: string
                   description: JSON string of report data
-                  example: '{"type":"route_issue","title":"Route 1 is delayed","description":"Route 1 has been experiencing delays"}'
+                  example: '{"type":"route_issue","title":"Route 1 is delayed","description":"Route 1 has been experiencing delays","category":"Crash"}'
                 photos:
                   type: string
                   format: binary
@@ -881,6 +886,11 @@ paths:
             type: string
             enum: ["true", "false"]
           description: Show only reports from followed users (requires authentication)
+        - name: category
+          in: query
+          schema:
+            type: string
+          description: Filter by category name
       responses:
         "200":
           description: Feed of reports
@@ -1352,6 +1362,58 @@ paths:
                 $ref: "#/components/schemas/ReportListResponse"
         "404":
           $ref: "#/components/responses/NotFound"
+
+  /api/v1/report-categories:
+    get:
+      tags:
+        - Reports
+      summary: List report categories
+      description: Get list of predefined report categories. **Guest accessible** (authentication optional).
+      operationId: listReportCategories
+      responses:
+        "200":
+          description: List of report categories
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+              example:
+                success: true
+                data:
+                  categories:
+                    - id: 1
+                      name: "Crash"
+                      description: "Vehicle accidents or crashes"
+                    - id: 2
+                      name: "Trash"
+                      description: "Litter or garbage issues"
+    post:
+      tags:
+        - Reports
+      summary: Create report category
+      description: Create a new predefined report category. **Admin only**.
+      operationId: createReportCategory
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCategoryRequest"
+      responses:
+        "201":
+          description: Category created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /api/v1/users/{id}/profile:
     get:
@@ -2135,6 +2197,11 @@ components:
           enum: [pending, reviewed, resolved]
           default: pending
           example: pending
+        category:
+          type: string
+          nullable: true
+          description: Category of the report (can be predefined or custom)
+          example: Crash
         admin_notes:
           type: string
           nullable: true
@@ -2203,6 +2270,39 @@ components:
           type: string
           nullable: true
           example: Issue has been resolved
+
+    ReportCategory:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Crash
+        description:
+          type: string
+          nullable: true
+          example: Vehicle accidents or crashes
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateCategoryRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: Crash
+        description:
+          type: string
+          nullable: true
+          example: Vehicle accidents or crashes
 
     UpdateUserRoleRequest:
       type: object

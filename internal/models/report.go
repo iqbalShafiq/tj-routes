@@ -32,6 +32,7 @@ type Report struct {
 	RelatedRouteID *uint          `gorm:"index" json:"related_route_id,omitempty"`
 	RelatedStopID  *uint          `gorm:"index" json:"related_stop_id,omitempty"`
 	Status         ReportStatus   `gorm:"type:varchar(20);default:'pending'" json:"status"`
+	Category       *string        `gorm:"type:varchar(100);index" json:"category,omitempty"`
 	AdminNotes     *string        `gorm:"type:text" json:"admin_notes,omitempty"`
 	PhotoURLs      *string        `gorm:"type:jsonb" json:"photo_urls,omitempty"` // JSON array of URLs
 	PDFURLs        *string        `gorm:"type:jsonb" json:"pdf_urls,omitempty"`   // JSON array of URLs

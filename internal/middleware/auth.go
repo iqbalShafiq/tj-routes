@@ -28,9 +28,23 @@ func AuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 		}
 
 		tokenString := parts[1]
-		claims, err := utils.ValidateToken(tokenString, cfg.JWT.Secret)
+		claims, err := utils.ValidateToken(tokenString, cfg.JWT.Secret, cfg.JWT.Issuer, cfg.JWT.Audience)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or expired token"})
+			status := http.StatusUnauthorized
+			message := "Invalid or expired token"
+
+			switch err {
+			case utils.ErrExpiredToken:
+				message = "Token has expired"
+			case utils.ErrInvalidIssuer:
+				message = "Invalid token issuer"
+			case utils.ErrInvalidAudience:
+				message = "Invalid token audience"
+			case utils.ErrTokenNotYetValid:
+				message = "Token not yet valid"
+			}
+
+			c.JSON(status, gin.H{"error": message})
 			c.Abort()
 			return
 		}
@@ -51,7 +65,7 @@ func OptionalAuthMiddleware(cfg *config.Config) gin.HandlerFunc {
 			parts := strings.Split(authHeader, " ")
 			if len(parts) == 2 && parts[0] == "Bearer" {
 				tokenString := parts[1]
-				claims, err := utils.ValidateToken(tokenString, cfg.JWT.Secret)
+				claims, err := utils.ValidateToken(tokenString, cfg.JWT.Secret, cfg.JWT.Issuer, cfg.JWT.Audience)
 				if err == nil {
 					c.Set("user_id", claims.UserID)
 					c.Set("user_email", claims.Email)

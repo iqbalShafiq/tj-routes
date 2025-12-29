@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"os"
@@ -310,7 +311,7 @@ func main() {
 	}
 
 	// Initialize handlers
-	authHandler := handler.NewAuthHandler(userService, cfg)
+	authHandler := handler.NewAuthHandler(userService, cfg, cacheInstance)
 	stopHandler := handler.NewStopHandler(stopService, fileStorage)
 	routeHandler := handler.NewRouteHandler(routeService)
 	vehicleHandler := handler.NewVehicleHandler(vehicleService, fileStorage)
@@ -350,6 +351,13 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 	router := gin.New()
+
+	// Request size limit middleware - prevents DoS attacks via large request bodies
+	// 10MB limit for most requests
+	router.Use(func(c *gin.Context) {
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 10*1024*1024)
+		c.Next()
+	})
 
 	// Recovery middleware (with custom recovery)
 	router.Use(gin.CustomRecovery(func(c *gin.Context, recovered interface{}) {
@@ -398,52 +406,6 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{
 			"status":    "healthy",
 			"timestamp": time.Now().Unix(),
-		})
-	})
-
-	// Test endpoint for error logging (temporary - remove in production)
-	router.GET("/test-error", func(c *gin.Context) {
-		logger.Error("Test error log",
-			zap.String("message", "This is a test error to verify file logging"),
-			zap.String("endpoint", "/test-error"),
-			zap.String("timestamp", time.Now().Format(time.RFC3339)),
-		)
-		// Force sync to ensure log is written immediately
-		logger.Sync()
-
-		// Check if log file exists
-		logFileExists := false
-		logFilePath := ""
-		if cfg.Logging.ErrorLogFile != "" {
-			absPath, _ := filepath.Abs(cfg.Logging.ErrorLogFile)
-			logFilePath = absPath
-			if _, err := os.Stat(absPath); err == nil {
-				logFileExists = true
-			}
-		}
-
-		envValue := os.Getenv("ERROR_LOG_FILE")
-		wd, _ := os.Getwd()
-
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"success": false,
-			"error":   "Test error - check logs/errors.log file",
-			"message": "This endpoint is for testing error file logging only",
-			"debug": gin.H{
-				"error_log_file_from_env":    envValue,
-				"error_log_file_from_config": cfg.Logging.ErrorLogFile,
-				"working_directory":          wd,
-				"log_file_path":              logFilePath,
-				"log_file_exists":            logFileExists,
-				"log_file_directory_exists": func() bool {
-					if logFilePath != "" {
-						dir := filepath.Dir(logFilePath)
-						_, err := os.Stat(dir)
-						return err == nil
-					}
-					return false
-				}(),
-			},
 		})
 	})
 
@@ -682,8 +644,37 @@ func main() {
 	// Start server in a goroutine
 	go func() {
 		logger.Info("Server starting", zap.String("address", addr))
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Fatal("Failed to start server", zap.Error(err))
+
+		// Check if TLS is enabled
+		if cfg.TLS.Enabled {
+			// TLS configuration
+			tlsConfig := &tls.Config{
+				MinVersion:               tls.VersionTLS12,
+				CurvePreferences:         []tls.CurveID{tls.CurveP256, tls.X25519},
+				PreferServerCipherSuites: true,
+			}
+
+			// Set minimum TLS version if specified
+			switch cfg.TLS.MinVersion {
+			case "1.2":
+				tlsConfig.MinVersion = tls.VersionTLS12
+			case "1.3":
+				tlsConfig.MinVersion = tls.VersionTLS13
+			}
+
+			srv.TLSConfig = tlsConfig
+			logger.Info("Starting server with TLS",
+				zap.String("cert_file", cfg.TLS.CertFile),
+				zap.String("key_file", cfg.TLS.KeyFile),
+			)
+			if err := srv.ListenAndServeTLS(cfg.TLS.CertFile, cfg.TLS.KeyFile); err != nil && err != http.ErrServerClosed {
+				logger.Fatal("Failed to start TLS server", zap.Error(err))
+			}
+		} else {
+			logger.Warn("Starting server without TLS - use a reverse proxy for production")
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				logger.Fatal("Failed to start server", zap.Error(err))
+			}
 		}
 	}()
 

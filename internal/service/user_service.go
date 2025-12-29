@@ -27,16 +27,19 @@ type UserService interface {
 }
 
 type userService struct {
-	userRepo repository.UserRepository
-	config   *config.Config
-	cache    cache.Cache
+	userRepo           repository.UserRepository
+	config             *config.Config
+	cache              cache.Cache
+	loginAttemptTracker *utils.LoginAttemptTracker
 }
 
 func NewUserService(userRepo repository.UserRepository, cfg *config.Config, cacheInstance cache.Cache) UserService {
+	tracker := utils.NewLoginAttemptTracker(cacheInstance, cfg.Security)
 	return &userService{
-		userRepo: userRepo,
-		config:   cfg,
-		cache:    cacheInstance,
+		userRepo:            userRepo,
+		config:              cfg,
+		cache:               cacheInstance,
+		loginAttemptTracker: tracker,
 	}
 }
 
@@ -45,6 +48,16 @@ func (s *userService) Register(email, username, password string) (*models.User, 
 	existingUser, _ := s.userRepo.FindByEmail(email)
 	if existingUser != nil {
 		return nil, errors.New("user with this email already exists")
+	}
+
+	// Validate password strength
+	if err := utils.ValidatePasswordStrength(password); err != nil {
+		return nil, err
+	}
+
+	// Check for common passwords
+	if utils.IsCommonPassword(password) {
+		return nil, errors.New("password is too common, please choose a stronger password")
 	}
 
 	// Hash password
@@ -69,6 +82,19 @@ func (s *userService) Register(email, username, password string) (*models.User, 
 }
 
 func (s *userService) Login(email, password string) (*models.User, string, string, error) {
+	ctx := context.Background()
+
+	// Check if account is locked out
+	info, err := s.loginAttemptTracker.GetLockoutInfo(ctx, email)
+	if err != nil {
+		// Log error but continue with login attempt
+		fmt.Printf("failed to get lockout info: %v\n", err)
+	}
+
+	if info.IsLockedOut {
+		return nil, "", "", fmt.Errorf("account is locked due to too many failed login attempts. Please try again in %d seconds", info.RemainingSeconds)
+	}
+
 	user, err := s.userRepo.FindByEmail(email)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -84,7 +110,25 @@ func (s *userService) Login(email, password string) (*models.User, string, strin
 
 	// Verify password
 	if !utils.CheckPasswordHash(password, *user.Password) {
-		return nil, "", "", errors.New("invalid email or password")
+		// Record failed attempt
+		lockedOut, remainingAttempts, err := s.loginAttemptTracker.RecordLoginFailure(ctx, email)
+		if err != nil {
+			// Log error but don't expose to caller
+			fmt.Printf("failed to record login failure: %v\n", err)
+		}
+
+		if lockedOut {
+			return nil, "", "", fmt.Errorf("invalid email or password. Account locked after %d failed attempts. Please try again in %d seconds",
+				s.config.Security.MaxLoginAttempts, s.config.Security.AccountLockoutMinutes*60)
+		}
+
+		return nil, "", "", fmt.Errorf("invalid email or password. %d attempts remaining before lockout", remainingAttempts)
+	}
+
+	// Clear failed attempts on successful login
+	if err := s.loginAttemptTracker.RecordLoginSuccess(ctx, email); err != nil {
+		// Log error but don't fail login
+		fmt.Printf("failed to clear login attempts: %v\n", err)
 	}
 
 	// Generate tokens

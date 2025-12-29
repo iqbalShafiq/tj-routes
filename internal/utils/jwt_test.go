@@ -34,6 +34,8 @@ func TestValidateToken(t *testing.T) {
 		Secret:              secret,
 		ExpirationHours:     24,
 		RefreshExpirationHours: 168,
+		Issuer:              "test-issuer",
+		Audience:            "test-audience",
 	}
 
 	user := &models.User{
@@ -45,7 +47,7 @@ func TestValidateToken(t *testing.T) {
 	token, err := GenerateToken(user, cfg)
 	assert.NoError(t, err)
 
-	claims, err := ValidateToken(token, secret)
+	claims, err := ValidateToken(token, secret, cfg.Issuer, cfg.Audience)
 	assert.NoError(t, err)
 	assert.NotNil(t, claims)
 	assert.Equal(t, user.ID, claims.UserID)
@@ -57,7 +59,7 @@ func TestValidateToken_InvalidToken(t *testing.T) {
 	secret := "test-secret-key-for-testing-purposes"
 	invalidToken := "invalid.token.here"
 
-	claims, err := ValidateToken(invalidToken, secret)
+	claims, err := ValidateToken(invalidToken, secret, "", "")
 	assert.Error(t, err)
 	assert.Nil(t, claims)
 }
@@ -68,6 +70,8 @@ func TestValidateToken_ExpiredToken(t *testing.T) {
 		Secret:              secret,
 		ExpirationHours:     -1, // Expired immediately
 		RefreshExpirationHours: 168,
+		Issuer:              "test-issuer",
+		Audience:            "test-audience",
 	}
 
 	user := &models.User{
@@ -83,7 +87,7 @@ func TestValidateToken_ExpiredToken(t *testing.T) {
 	// Wait a bit and try to validate (this test structure is simplified)
 	// In practice, you'd want to test with an actually expired token
 	time.Sleep(100 * time.Millisecond)
-	claims, err := ValidateToken(token, secret)
+	claims, err := ValidateToken(token, secret, cfg.Issuer, cfg.Audience)
 	// This should still work since we're just testing the structure
 	// A proper test would use a token with actual expiration in the past
 	if err == nil {

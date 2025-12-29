@@ -17,6 +17,8 @@ type Config struct {
 	Cache       CacheConfig
 	FileStorage FileStorageConfig
 	JobQueue    JobQueueConfig
+	Security    SecurityConfig
+	TLS         TLSConfig
 }
 
 type ServerConfig struct {
@@ -26,6 +28,14 @@ type ServerConfig struct {
 	AllowedOrigin string // For CORS - comma-separated origins or "*" for all
 	ReadTimeout   int    // in seconds
 	WriteTimeout  int    // in seconds
+}
+
+// TLSConfig contains TLS/SSL configuration
+type TLSConfig struct {
+	Enabled     bool   // Enable TLS
+	CertFile    string // Path to certificate file
+	KeyFile     string // Path to private key file
+	MinVersion  string // Minimum TLS version (e.g., "1.2", "1.3")
 }
 
 type DatabaseConfig struct {
@@ -50,6 +60,18 @@ type JWTConfig struct {
 	Secret                 string
 	ExpirationHours        int
 	RefreshExpirationHours int
+	Issuer                 string // Token issuer claim
+	Audience               string // Token audience claim
+}
+
+// SecurityConfig contains security-related configuration
+type SecurityConfig struct {
+	MaxLoginAttempts      int // Maximum failed login attempts before lockout
+	AccountLockoutMinutes int // Lockout duration in minutes after max failed attempts
+}
+
+func (s SecurityConfig) LockoutDuration() time.Duration {
+	return time.Duration(s.AccountLockoutMinutes) * time.Minute
 }
 
 func (j JWTConfig) ExpirationDuration() time.Duration {
@@ -140,6 +162,8 @@ func Load() (*Config, error) {
 			Secret:                 getEnv("JWT_SECRET", "your-super-secret-jwt-key-change-in-production"),
 			ExpirationHours:        getEnvAsInt("JWT_EXPIRATION_HOURS", 24),
 			RefreshExpirationHours: getEnvAsInt("JWT_REFRESH_EXPIRATION_HOURS", 168),
+			Issuer:                 getEnv("JWT_ISSUER", ""),
+			Audience:               getEnv("JWT_AUDIENCE", ""),
 		},
 		OAuth: OAuthConfig{
 			GoogleClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
@@ -182,6 +206,16 @@ func Load() (*Config, error) {
 			StuckJobThresholdMinutes: getEnvAsInt("JOB_QUEUE_STUCK_THRESHOLD_MINUTES", 10),
 			MaxRetryAttempts:         getEnvAsInt("JOB_QUEUE_MAX_RETRY", 3),
 			Concurrency:              getEnvAsInt("JOB_QUEUE_CONCURRENCY", 5),
+		},
+		Security: SecurityConfig{
+			MaxLoginAttempts:      getEnvAsInt("SECURITY_MAX_LOGIN_ATTEMPTS", 5),
+			AccountLockoutMinutes: getEnvAsInt("SECURITY_LOCKOUT_MINUTES", 15),
+		},
+		TLS: TLSConfig{
+			Enabled:    getEnvAsBool("TLS_ENABLED", false),
+			CertFile:   getEnv("TLS_CERT_FILE", ""),
+			KeyFile:    getEnv("TLS_KEY_FILE", ""),
+			MinVersion: getEnv("TLS_MIN_VERSION", "1.3"),
 		},
 	}
 

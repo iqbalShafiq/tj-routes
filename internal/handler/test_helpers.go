@@ -181,7 +181,7 @@ func setupTestRouter(db *gorm.DB, cfg *config.Config) *gin.Engine {
 	reactionService := service.NewReactionService(reactionRepo, reportRepo, commentRepo, reputationService)
 
 	// Initialize handlers
-	authHandler := NewAuthHandler(userService, cfg)
+	authHandler := NewAuthHandler(userService, cfg, cacheInstance)
 	stopHandler := NewStopHandler(stopService, fileStorage)
 	routeHandler := NewRouteHandler(routeService)
 	vehicleHandler := NewVehicleHandler(vehicleService, fileStorage)

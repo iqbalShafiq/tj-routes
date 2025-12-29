@@ -68,7 +68,8 @@ func SetupLogger(cfg *config.Config) (*zap.Logger, error) {
 		}
 
 		// Open the error log file (create if it doesn't exist)
-		errorLogFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		// Using 0640 permissions to prevent world-readable log files
+		errorLogFile, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0640)
 		if err != nil {
 			return nil, err
 		}

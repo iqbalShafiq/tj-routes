@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 
 	"tj-routes/internal/dto"
@@ -33,7 +34,7 @@ func (r *routeRepository) Create(route *models.Route) error {
 
 func (r *routeRepository) FindByID(id uint) (*models.Route, error) {
 	var route models.Route
-	err := r.db.Preload("RouteStops.Stop").First(&route, id).Error
+	err := r.db.WithContext(context.Background()).Preload("RouteStops.Stop").First(&route, id).Error
 	if err != nil {
 		return nil, err
 	}

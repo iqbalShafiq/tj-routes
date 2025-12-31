@@ -82,6 +82,7 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.ForumPost{},
 		&models.ForumMember{},
 		&models.ForumPostHashtag{},
+		&models.CheckIn{},
 	); err != nil {
 		return err
 	}

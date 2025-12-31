@@ -13,6 +13,7 @@ info:
     - Vehicle Management
     - Reporting System
     - Social Media Features (Public Feed, Hashtags, User Following, Trending, Stories)
+    - Journey Check-ins (Track your commute with private check-ins, earn reputation points and badges)
   version: 1.0.0
   contact:
     name: API Support
@@ -56,6 +57,8 @@ tags:
     description: Route forum management and participation
   - name: ForumPosts
     description: Forum post management
+  - name: CheckIns
+    description: Journey check-in tracking for private user commute history
   - name: Health
     description: Health check endpoint
 
@@ -2207,6 +2210,216 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/v1/check-ins:
+    post:
+      tags:
+        - CheckIns
+      summary: Create a new check-in
+      description: Start a new journey check-in from a specific stop on a route. Only one in-progress check-in allowed per user.
+      operationId: createCheckIn
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCheckInRequest"
+      responses:
+        "201":
+          description: Check-in created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckInResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Conflict - active check-in already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    get:
+      tags:
+        - CheckIns
+      summary: List user's check-ins
+      description: Get paginated list of user's check-in history. Users can only see their own check-ins.
+      operationId: listCheckIns
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [in_progress, completed, cancelled]
+          description: Filter by check-in status
+      responses:
+        "200":
+          description: List of check-ins
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckInListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/check-ins/stats:
+    get:
+      tags:
+        - CheckIns
+      summary: Get user's check-in statistics
+      description: Get statistics for user's check-in history including total check-ins, streak, and routes.
+      operationId: getCheckInStats
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Check-in statistics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckInStatsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/check-ins/{id}:
+    get:
+      tags:
+        - CheckIns
+      summary: Get check-in by ID
+      description: Get detailed information about a specific check-in. Users can only access their own check-ins.
+      operationId: getCheckIn
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Check-in details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckInResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags:
+        - CheckIns
+      summary: Update check-in
+      description: Update a check-in (e.g., add notes). Users can only update their own check-ins.
+      operationId: updateCheckIn
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateCheckInRequest"
+      responses:
+        "200":
+          description: Check-in updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckInResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    delete:
+      tags:
+        - CheckIns
+      summary: Delete check-in
+      description: Delete a check-in. Users can only delete their own check-ins.
+      operationId: deleteCheckIn
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Check-in deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/check-ins/{id}/complete:
+    put:
+      tags:
+        - CheckIns
+      summary: Complete a check-in
+      description: Complete an in-progress journey check-in by providing the end stop. Awards 5 reputation points and checks for badge eligibility.
+      operationId: completeCheckIn
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CompleteCheckInRequest"
+      responses:
+        "200":
+          description: Check-in completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckInResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/bulk-upload/{entityType}:
     post:
       tags:
@@ -2850,6 +3063,195 @@ components:
           format: date-time
           example: "2024-01-01T00:00:00Z"
 
+    CheckIn:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 1
+        route_id:
+          type: integer
+          example: 1
+        start_stop_id:
+          type: integer
+          example: 1
+        end_stop_id:
+          type: integer
+          nullable: true
+          example: 5
+        start_time:
+          type: string
+          format: date-time
+          example: "2024-01-01T07:30:00Z"
+        end_time:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2024-01-01T08:15:00Z"
+        duration_seconds:
+          type: integer
+          nullable: true
+          description: Duration in seconds
+          example: 2700
+        notes:
+          type: string
+          nullable: true
+          example: "Morning commute, bus was crowded"
+        status:
+          type: string
+          enum: [in_progress, completed, cancelled]
+          example: completed
+        points_earned:
+          type: integer
+          default: 0
+          example: 5
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T07:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T08:15:00Z"
+
+    CreateCheckInRequest:
+      type: object
+      required:
+        - route_id
+        - start_stop_id
+      properties:
+        route_id:
+          type: integer
+          example: 1
+          description: ID of the route being taken
+        start_stop_id:
+          type: integer
+          example: 1
+          description: ID of the stop where journey starts
+        start_time:
+          type: string
+          format: date-time
+          nullable: true
+          description: Journey start time (defaults to current time if not provided)
+          example: "2024-01-01T07:30:00Z"
+        notes:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: Optional notes about the journey
+
+    CompleteCheckInRequest:
+      type: object
+      required:
+        - end_stop_id
+      properties:
+        end_stop_id:
+          type: integer
+          example: 5
+          description: ID of the stop where journey ends
+        end_time:
+          type: string
+          format: date-time
+          nullable: true
+          description: Journey end time (defaults to current time if not provided)
+          example: "2024-01-01T08:15:00Z"
+        notes:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: Optional notes about the journey
+
+    UpdateCheckInRequest:
+      type: object
+      properties:
+        notes:
+          type: string
+          nullable: true
+          maxLength: 500
+          description: Updated notes for the check-in
+
+    CheckInStats:
+      type: object
+      properties:
+        total_check_ins:
+          type: integer
+          example: 25
+          description: Total number of check-ins
+        completed_check_ins:
+          type: integer
+          example: 20
+          description: Number of completed check-ins
+        total_points_earned:
+          type: integer
+          example: 100
+          description: Total reputation points earned from check-ins
+        current_streak_days:
+          type: integer
+          example: 7
+          description: Current consecutive days streak
+        longest_streak_days:
+          type: integer
+          example: 14
+          description: Longest consecutive days streak
+        unique_routes_count:
+          type: integer
+          example: 5
+          description: Number of different routes checked in on
+        total_duration_seconds:
+          type: integer
+          format: int64
+          example: 54000
+          description: Total journey duration in seconds
+        average_duration_seconds:
+          type: number
+          format: double
+          example: 2700.5
+          description: Average journey duration in seconds
+
+    CheckInResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/CheckIn"
+
+    CheckInListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            check_ins:
+              type: array
+              items:
+                $ref: "#/components/schemas/CheckIn"
+            total:
+              type: integer
+              example: 25
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 10
+
+    CheckInStatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/CheckInStats"
+
     Forum:
       type: object
       properties:
@@ -3042,6 +3444,9 @@ components:
               comments_made,
               upvotes_received,
               reputation_points,
+              check_ins_count,
+              unique_routes,
+              consecutive_days,
             ]
           example: reports_accepted
         criteria_value:

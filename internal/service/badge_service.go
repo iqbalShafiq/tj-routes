@@ -18,6 +18,7 @@ type badgeService struct {
 	reportRepo    repository.ReportRepository
 	commentRepo   repository.CommentRepository
 	reactionRepo  repository.ReactionRepository
+	checkInRepo   repository.CheckInRepository
 }
 
 func NewBadgeService(
@@ -35,6 +36,26 @@ func NewBadgeService(
 		reportRepo:    reportRepo,
 		commentRepo:   commentRepo,
 		reactionRepo:  reactionRepo,
+	}
+}
+
+func NewBadgeServiceWithCheckIn(
+	badgeRepo repository.BadgeRepository,
+	userBadgeRepo repository.UserBadgeRepository,
+	userRepo repository.UserRepository,
+	reportRepo repository.ReportRepository,
+	commentRepo repository.CommentRepository,
+	reactionRepo repository.ReactionRepository,
+	checkInRepo repository.CheckInRepository,
+) BadgeService {
+	return &badgeService{
+		badgeRepo:     badgeRepo,
+		userBadgeRepo: userBadgeRepo,
+		userRepo:      userRepo,
+		reportRepo:    reportRepo,
+		commentRepo:   commentRepo,
+		reactionRepo:  reactionRepo,
+		checkInRepo:   checkInRepo,
 	}
 }
 
@@ -113,6 +134,36 @@ func (s *badgeService) meetsCriteria(userID uint, badge models.Badge) bool {
 			return false
 		}
 		return user.ReputationPoints >= badge.CriteriaValue
+
+	case models.BadgeCriteriaCheckInsCount:
+		if s.checkInRepo == nil {
+			return false
+		}
+		count, err := s.checkInRepo.CountCompletedByUserID(userID)
+		if err != nil {
+			return false
+		}
+		return count >= int64(badge.CriteriaValue)
+
+	case models.BadgeCriteriaUniqueRoutes:
+		if s.checkInRepo == nil {
+			return false
+		}
+		count, err := s.checkInRepo.CountUniqueRoutesByUserID(userID)
+		if err != nil {
+			return false
+		}
+		return count >= int64(badge.CriteriaValue)
+
+	case models.BadgeCriteriaConsecutiveDays:
+		if s.checkInRepo == nil {
+			return false
+		}
+		count, err := s.checkInRepo.GetConsecutiveDaysCount(userID)
+		if err != nil {
+			return false
+		}
+		return count >= badge.CriteriaValue
 
 	default:
 		return false

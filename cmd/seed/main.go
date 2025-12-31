@@ -308,6 +308,49 @@ func seedBadges(badgeRepo repository.BadgeRepository) error {
 			CriteriaType:  models.BadgeCriteriaReputationPoints,
 			CriteriaValue: 1000,
 		},
+		// Journey Check-in Badges
+		{
+			Name:          "First Journey",
+			Description:   "Completed your first check-in",
+			Icon:          "🚌",
+			CriteriaType:  models.BadgeCriteriaCheckInsCount,
+			CriteriaValue: 1,
+		},
+		{
+			Name:          "Commuter",
+			Description:   "Completed 10 check-ins",
+			Icon:          "🚇",
+			CriteriaType:  models.BadgeCriteriaCheckInsCount,
+			CriteriaValue: 10,
+		},
+		{
+			Name:          "Regular Rider",
+			Description:   "Completed 50 check-ins",
+			Icon:          "🎫",
+			CriteriaType:  models.BadgeCriteriaCheckInsCount,
+			CriteriaValue: 50,
+		},
+		{
+			Name:          "Route Master",
+			Description:   "Checked in on 10 different routes",
+			Icon:          "🗺️",
+			CriteriaType:  models.BadgeCriteriaUniqueRoutes,
+			CriteriaValue: 10,
+		},
+		{
+			Name:          "Consistent Commuter",
+			Description:   "7 consecutive days of check-ins",
+			Icon:          "📅",
+			CriteriaType:  models.BadgeCriteriaConsecutiveDays,
+			CriteriaValue: 7,
+		},
+		{
+			Name:          "Dedicated Rider",
+			Description:   "30 consecutive days of check-ins",
+			Icon:          "🏅",
+			CriteriaType:  models.BadgeCriteriaConsecutiveDays,
+			CriteriaValue: 30,
+		},
 	}
 
 	fmt.Println("Seeding badges...")
@@ -1032,6 +1075,21 @@ func seedUserBadges(db *gorm.DB, userBadgeRepo repository.UserBadgeRepository, b
 			case models.BadgeCriteriaUpvotesReceived:
 				// Simulate: users with higher reputation likely have more upvotes
 				if user.ReputationPoints >= badge.CriteriaValue*2 {
+					shouldHave = true
+				}
+			case models.BadgeCriteriaCheckInsCount:
+				// Simulate: users with higher reputation likely have more check-ins
+				if user.ReputationPoints >= badge.CriteriaValue*5 {
+					shouldHave = true
+				}
+			case models.BadgeCriteriaUniqueRoutes:
+				// Simulate: users with higher reputation likely have checked more routes
+				if user.ReputationPoints >= badge.CriteriaValue*10 {
+					shouldHave = true
+				}
+			case models.BadgeCriteriaConsecutiveDays:
+				// Simulate: only very active users have consecutive days badges
+				if user.ReputationPoints >= badge.CriteriaValue*15 {
 					shouldHave = true
 				}
 			}

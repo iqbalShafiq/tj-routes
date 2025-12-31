@@ -7,10 +7,13 @@ import (
 type BadgeCriteriaType string
 
 const (
-	BadgeCriteriaReportsAccepted BadgeCriteriaType = "reports_accepted"
-	BadgeCriteriaCommentsMade     BadgeCriteriaType = "comments_made"
-	BadgeCriteriaUpvotesReceived  BadgeCriteriaType = "upvotes_received"
-	BadgeCriteriaReputationPoints BadgeCriteriaType = "reputation_points"
+	BadgeCriteriaReportsAccepted   BadgeCriteriaType = "reports_accepted"
+	BadgeCriteriaCommentsMade      BadgeCriteriaType = "comments_made"
+	BadgeCriteriaUpvotesReceived   BadgeCriteriaType = "upvotes_received"
+	BadgeCriteriaReputationPoints  BadgeCriteriaType = "reputation_points"
+	BadgeCriteriaCheckInsCount     BadgeCriteriaType = "check_ins_count"
+	BadgeCriteriaUniqueRoutes      BadgeCriteriaType = "unique_routes"
+	BadgeCriteriaConsecutiveDays   BadgeCriteriaType = "consecutive_days"
 )
 
 type Badge struct {

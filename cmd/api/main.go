@@ -193,6 +193,7 @@ func main() {
 	forumRepo := repository.NewForumRepository(db)
 	forumPostRepo := repository.NewForumPostRepository(db)
 	forumMemberRepo := repository.NewForumMemberRepository(db)
+	checkInRepo := repository.NewCheckInRepository(db)
 
 	// Initialize file storage (needed for bulk upload service and handlers)
 	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.Host, cfg.Server.Port)
@@ -225,7 +226,7 @@ func main() {
 	
 	// Initialize reputation and badge services
 	reputationService := service.NewReputationService(userRepo)
-	badgeService := service.NewBadgeService(badgeRepo, userBadgeRepo, userRepo, reportRepo, commentRepo, reactionRepo)
+	badgeService := service.NewBadgeServiceWithCheckIn(badgeRepo, userBadgeRepo, userRepo, reportRepo, commentRepo, reactionRepo, checkInRepo)
 	
 	// Initialize user follow service
 	userFollowService := service.NewUserFollowService(userFollowRepo, userRepo)
@@ -254,6 +255,9 @@ func main() {
 	// Initialize comment and reaction services (with forum post support)
 	commentService := service.NewCommentServiceWithForumPost(commentRepo, reportRepo, forumPostRepo)
 	reactionService := service.NewReactionServiceWithForumPost(reactionRepo, reportRepo, commentRepo, forumPostRepo, reputationService)
+
+	// Initialize check-in service
+	checkInService := service.NewCheckInService(checkInRepo, routeRepo, stopRepo, userRepo, reputationService, badgeService, cacheInstance)
 
 	// Initialize bulk upload service
 	var bulkUploadService service.BulkUploadService
@@ -327,6 +331,7 @@ func main() {
 	reportCategoryHandler := handler.NewReportCategoryHandler(reportCategoryService)
 	forumHandler := handler.NewForumHandler(forumService)
 	forumPostHandler := handler.NewForumPostHandler(forumPostService, fileStorage)
+	checkInHandler := handler.NewCheckInHandler(checkInService)
 
 	// Initialize bulk upload handler (always create, even if service is nil)
 	// This ensures routes are registered, but will return error if service unavailable
@@ -623,10 +628,22 @@ func main() {
 			{
 				forumPosts.GET("/:id/comments", commentHandler.GetCommentsByForumPost)
 				forumPosts.POST("/:id/comments", commentHandler.CreateCommentOnForumPost)
-				
+
 				// Forum post reactions
 				forumPosts.POST("/:id/react", reactionHandler.ReactToForumPost)
 				forumPosts.DELETE("/:id/react", reactionHandler.RemoveReactionFromForumPost)
+			}
+
+			// Journey check-ins (private - user only accesses their own)
+			checkIns := protected.Group("/check-ins")
+			{
+				checkIns.POST("", checkInHandler.CreateCheckIn)
+				checkIns.GET("", checkInHandler.ListCheckIns)
+				checkIns.GET("/stats", checkInHandler.GetStats)
+				checkIns.GET("/:id", checkInHandler.GetCheckIn)
+				checkIns.PUT("/:id/complete", checkInHandler.CompleteCheckIn)
+				checkIns.PUT("/:id", checkInHandler.UpdateCheckIn)
+				checkIns.DELETE("/:id", checkInHandler.DeleteCheckIn)
 			}
 		}
 	}

@@ -101,6 +101,13 @@ func (h *ReportHandler) GetReport(c *gin.Context) {
 		return
 	}
 
+	// Enhance with user_reaction and other metadata
+	enhancedReports := h.enhanceReports(c, []models.Report{*report})
+	if len(enhancedReports) > 0 {
+		SuccessResponse(c, http.StatusOK, enhancedReports[0])
+		return
+	}
+
 	SuccessResponse(c, http.StatusOK, report)
 }
 

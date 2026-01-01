@@ -323,7 +323,7 @@ func main() {
 	reportHandler := handler.NewReportHandlerWithSocial(reportService, userService, fileStorage, reportRepo, reactionRepo, userFollowService)
 	userHandler := handler.NewUserHandler(userService)
 	docsHandler := handler.NewDocsHandler()
-	commentHandler := handler.NewCommentHandler(commentService)
+	commentHandler := handler.NewCommentHandler(commentService, reactionRepo)
 	reactionHandler := handler.NewReactionHandler(reactionService)
 	leaderboardHandler := handler.NewLeaderboardHandler(userRepo, badgeService, reputationService)
 	userFollowHandler := handler.NewUserFollowHandler(userFollowService)

@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"tj-routes/internal/models"
+	"tj-routes/internal/repository"
 	"tj-routes/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +13,7 @@ import (
 
 type CommentHandler struct {
 	commentService service.CommentService
+	reactionRepo   repository.ReactionRepository
 }
 
 type CreateCommentRequest struct {
@@ -23,9 +25,10 @@ type UpdateCommentRequest struct {
 	Content string `json:"content" binding:"required"`
 }
 
-func NewCommentHandler(commentService service.CommentService) *CommentHandler {
+func NewCommentHandler(commentService service.CommentService, reactionRepo repository.ReactionRepository) *CommentHandler {
 	return &CommentHandler{
 		commentService: commentService,
+		reactionRepo:   reactionRepo,
 	}
 }
 
@@ -42,8 +45,11 @@ func (h *CommentHandler) GetComments(c *gin.Context) {
 		return
 	}
 
+	// Enhance comments with user_reaction
+	enhancedComments := h.enhanceComments(c, comments)
+
 	SuccessResponse(c, http.StatusOK, gin.H{
-		"comments": comments,
+		"comments": enhancedComments,
 	})
 }
 
@@ -187,5 +193,59 @@ func (h *CommentHandler) CreateCommentOnForumPost(c *gin.Context) {
 	comment, _ = h.commentService.GetCommentByID(comment.ID)
 
 	SuccessResponse(c, http.StatusCreated, comment)
+}
+
+// enhanceComments adds user_reaction to comments for authenticated users
+func (h *CommentHandler) enhanceComments(c *gin.Context, comments []models.Comment) []map[string]interface{} {
+	var userID *uint
+	if userIDVal, exists := c.Get("user_id"); exists {
+		id := userIDVal.(uint)
+		userID = &id
+	}
+
+	enhanced := make([]map[string]interface{}, len(comments))
+	for i, comment := range comments {
+		enhanced[i] = h.enhanceCommentWithReplies(comment, userID)
+	}
+
+	return enhanced
+}
+
+// enhanceCommentWithReplies adds user_reaction to a comment and recursively processes replies
+func (h *CommentHandler) enhanceCommentWithReplies(comment models.Comment, userID *uint) map[string]interface{} {
+	enhancedComment := map[string]interface{}{
+		"id":         comment.ID,
+		"report_id":  comment.ReportID,
+		"user_id":    comment.UserID,
+		"parent_id":  comment.ParentID,
+		"content":    comment.Content,
+		"upvotes":    comment.Upvotes,
+		"downvotes":  comment.Downvotes,
+		"created_at": comment.CreatedAt,
+		"updated_at": comment.UpdatedAt,
+		"user":       comment.User,
+	}
+
+	// Add user reaction if user is authenticated and reaction repo is available
+	if userID != nil && h.reactionRepo != nil {
+		if reaction, err := h.reactionRepo.FindByUserAndTarget(*userID, models.ReactionTargetComment, comment.ID); err == nil && reaction != nil {
+			enhancedComment["user_reaction"] = reaction.ReactionType
+		} else {
+			enhancedComment["user_reaction"] = nil
+		}
+	}
+
+	// Recursively process replies
+	if len(comment.Replies) > 0 {
+		enhancedReplies := make([]map[string]interface{}, len(comment.Replies))
+		for i, reply := range comment.Replies {
+			enhancedReplies[i] = h.enhanceCommentWithReplies(reply, userID)
+		}
+		enhancedComment["replies"] = enhancedReplies
+	} else {
+		enhancedComment["replies"] = []map[string]interface{}{}
+	}
+
+	return enhancedComment
 }
 

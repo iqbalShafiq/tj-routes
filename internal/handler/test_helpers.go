@@ -188,7 +188,7 @@ func setupTestRouter(db *gorm.DB, cfg *config.Config) *gin.Engine {
 	reportHandler := NewReportHandler(reportService, userService, fileStorage, reportRepo)
 	userHandler := NewUserHandler(userService)
 	docsHandler := NewDocsHandler()
-	commentHandler := NewCommentHandler(commentService)
+	commentHandler := NewCommentHandler(commentService, reactionRepo)
 	reactionHandler := NewReactionHandler(reactionService)
 	leaderboardHandler := NewLeaderboardHandler(userRepo, badgeService, reputationService)
 	bulkUploadHandler := NewBulkUploadHandler(nil) // No bulk upload service for tests

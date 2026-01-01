@@ -3012,6 +3012,11 @@ components:
           items:
             $ref: "#/components/schemas/Comment"
           description: Child comments (replies)
+        user_reaction:
+          type: string
+          nullable: true
+          enum: [upvote, downvote]
+          description: Current user's reaction to this comment (only present if authenticated)
 
     CreateCommentRequest:
       type: object

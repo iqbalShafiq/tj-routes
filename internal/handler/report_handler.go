@@ -67,11 +67,19 @@ func (h *ReportHandler) ListReports(c *gin.Context) {
 		filters["search"] = search
 	}
 
-	// Non-admin users only see their own reports
-	userRole, exists := c.Get("user_role")
-	if exists && userRole.(models.UserRole) != models.RoleAdmin {
-		userID, _ := c.Get("user_id")
-		filters["user_id"] = userID.(uint)
+	// Check for user_id query parameter first
+	if userIDStr := c.Query("user_id"); userIDStr != "" {
+		if userID, err := strconv.ParseUint(userIDStr, 10, 32); err == nil {
+			filters["user_id"] = uint(userID)
+		}
+	} else {
+		// No user_id param - apply default filtering (non-admins see only their own)
+		userRole, exists := c.Get("user_role")
+		if exists && userRole.(models.UserRole) != models.RoleAdmin {
+			userID, _ := c.Get("user_id")
+			filters["user_id"] = userID.(uint)
+		}
+		// Admins see all when no user_id specified (implicit - no filter added)
 	}
 
 	reports, total, err := h.reportService.ListReports(offset, limit, filters)

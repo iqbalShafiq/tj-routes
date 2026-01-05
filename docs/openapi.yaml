@@ -2577,6 +2577,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/v1/users/me/personalized/favorites/routes/{routeId}:
     post:
       tags:
         - UserPersonalized
@@ -2608,8 +2609,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-
-  /api/v1/users/me/personalized/favorites/routes/{routeId}:
     delete:
       tags:
         - UserPersonalized
@@ -2697,6 +2696,7 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/v1/users/me/personalized/favorites/stops/{stopId}:
     post:
       tags:
         - UserPersonalized
@@ -2728,8 +2728,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
-
-  /api/v1/users/me/personalized/favorites/stops/{stopId}:
     delete:
       tags:
         - UserPersonalized

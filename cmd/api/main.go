@@ -676,14 +676,14 @@ func main() {
 						routes.GET("", userPersonalizedHandler.GetFavoriteRoutes)
 						routes.POST("/:routeId", userPersonalizedHandler.AddFavoriteRoute)
 						routes.DELETE("/:routeId", userPersonalizedHandler.RemoveFavoriteRoute)
-						routes.GET("/:routeId/check", userPersonalizedHandler.IsFavoriteRoute)
+						routes.GET("/:routeId", userPersonalizedHandler.IsFavoriteRoute)
 					}
 					stops := favorites.Group("/stops")
 					{
 						stops.GET("", userPersonalizedHandler.GetFavoriteStops)
 						stops.POST("/:stopId", userPersonalizedHandler.AddFavoriteStop)
 						stops.DELETE("/:stopId", userPersonalizedHandler.RemoveFavoriteStop)
-						stops.GET("/:stopId/check", userPersonalizedHandler.IsFavoriteStop)
+						stops.GET("/:stopId", userPersonalizedHandler.IsFavoriteStop)
 					}
 				}
 

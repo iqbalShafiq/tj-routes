@@ -59,6 +59,8 @@ tags:
     description: Forum post management
   - name: CheckIns
     description: Journey check-in tracking for private user commute history
+  - name: UserPersonalized
+    description: User personalized data - favorites, places, recent views, and analytics
   - name: Health
     description: Health check endpoint
 
@@ -2541,6 +2543,634 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  # =====================
+  # User Personalized Data
+  # =====================
+
+  /api/v1/users/me/personalized/favorites/routes:
+    get:
+      tags:
+        - UserPersonalized
+      summary: Get favorite routes
+      description: Get all routes favorited by the authenticated user
+      operationId: getFavoriteRoutes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of favorite routes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserFavoriteRouteListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags:
+        - UserPersonalized
+      summary: Add route to favorites
+      description: Add a route to the authenticated user's favorites
+      operationId: addFavoriteRoute
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: routeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Route added to favorites
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Route already favorited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/users/me/personalized/favorites/routes/{routeId}:
+    delete:
+      tags:
+        - UserPersonalized
+      summary: Remove route from favorites
+      description: Remove a route from the authenticated user's favorites
+      operationId: removeFavoriteRoute
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: routeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Route removed from favorites
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    get:
+      tags:
+        - UserPersonalized
+      summary: Check if route is favorited
+      description: Check if a route is in the authenticated user's favorites
+      operationId: isFavoriteRoute
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: routeId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      is_favorite:
+                        type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/users/me/personalized/favorites/stops:
+    get:
+      tags:
+        - UserPersonalized
+      summary: Get favorite stops
+      description: Get all stops favorited by the authenticated user
+      operationId: getFavoriteStops
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of favorite stops
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserFavoriteStopListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags:
+        - UserPersonalized
+      summary: Add stop to favorites
+      description: Add a stop to the authenticated user's favorites
+      operationId: addFavoriteStop
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: stopId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "201":
+          description: Stop added to favorites
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: Stop already favorited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /api/v1/users/me/personalized/favorites/stops/{stopId}:
+    delete:
+      tags:
+        - UserPersonalized
+      summary: Remove stop from favorites
+      description: Remove a stop from the authenticated user's favorites
+      operationId: removeFavoriteStop
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: stopId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Stop removed from favorites
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    get:
+      tags:
+        - UserPersonalized
+      summary: Check if stop is favorited
+      description: Check if a stop is in the authenticated user's favorites
+      operationId: isFavoriteStop
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: stopId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      is_favorite:
+                        type: boolean
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/users/me/personalized/places:
+    get:
+      tags:
+        - UserPersonalized
+      summary: Get saved places
+      description: Get all saved places for the authenticated user
+      operationId: getPlaces
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of saved places
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPlaceListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags:
+        - UserPersonalized
+      summary: Create saved place
+      description: Create a new saved place for the authenticated user
+      operationId: createPlace
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserPlaceRequest"
+      responses:
+        "201":
+          description: Place created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPlaceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/users/me/personalized/places/{id}:
+    get:
+      tags:
+        - UserPersonalized
+      summary: Get saved place
+      description: Get a specific saved place by ID
+      operationId: getPlace
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Place details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPlaceResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      tags:
+        - UserPersonalized
+      summary: Update saved place
+      description: Update a saved place for the authenticated user
+      operationId: updatePlace
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserPlaceRequest"
+      responses:
+        "200":
+          description: Place updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserPlaceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      tags:
+        - UserPersonalized
+      summary: Delete saved place
+      description: Delete a saved place for the authenticated user
+      operationId: deletePlace
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Place deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/users/me/personalized/recent/routes:
+    get:
+      tags:
+        - UserPersonalized
+      summary: Get recently viewed routes
+      description: Get recently viewed routes for the authenticated user
+      operationId: getRecentRoutes
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of recently viewed routes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserFavoriteRouteListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/users/me/personalized/recent/stops:
+    get:
+      tags:
+        - UserPersonalized
+      summary: Get recently viewed stops
+      description: Get recently viewed stops for the authenticated user
+      operationId: getRecentStops
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of recently viewed stops
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserFavoriteStopListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/users/me/personalized/recent/navigations:
+    get:
+      tags:
+        - UserPersonalized
+      summary: Get recent navigation searches
+      description: Get recent navigation searches for the authenticated user
+      operationId: getRecentNavigations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of recent navigation searches
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSavedNavigationListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags:
+        - UserPersonalized
+      summary: Record navigation search
+      description: Record a navigation search as recent activity
+      operationId: recordRecentNavigation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecordRecentViewRequest"
+      responses:
+        "201":
+          description: Navigation recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/users/me/personalized/saved-navigations:
+    get:
+      tags:
+        - UserPersonalized
+      summary: Get saved navigation pairs
+      description: Get all saved navigation pairs for the authenticated user
+      operationId: getSavedNavigations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of saved navigation pairs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSavedNavigationListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+    post:
+      tags:
+        - UserPersonalized
+      summary: Create saved navigation
+      description: Create a new saved navigation pair for the authenticated user
+      operationId: createSavedNavigation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserSavedNavigationRequest"
+      responses:
+        "201":
+          description: Navigation saved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSavedNavigationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/users/me/personalized/saved-navigations/{id}:
+    put:
+      tags:
+        - UserPersonalized
+      summary: Update saved navigation
+      description: Update a saved navigation pair for the authenticated user
+      operationId: updateSavedNavigation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserSavedNavigationRequest"
+      responses:
+        "200":
+          description: Navigation updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserSavedNavigationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      tags:
+        - UserPersonalized
+      summary: Delete saved navigation
+      description: Delete a saved navigation pair for the authenticated user
+      operationId: deleteSavedNavigation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Navigation deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/users/me/personalized/analytics:
+    get:
+      tags:
+        - UserPersonalized
+      summary: Get user analytics
+      description: Get aggregated analytics for the authenticated user
+      operationId: getUserAnalytics
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User analytics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserAnalyticsResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -4227,6 +4857,383 @@ components:
           example: true
         data:
           $ref: "#/components/schemas/BulkUploadLog"
+
+    # =====================
+    # User Personalized Schemas
+    # =====================
+
+    UserPlace:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        place_type:
+          type: string
+          enum: [home, office, school, gym, shopping, restaurant, hospital, other, custom]
+          example: home
+        name:
+          type: string
+          example: My Home
+        latitude:
+          type: number
+          format: double
+          example: 37.7749
+        longitude:
+          type: number
+          format: double
+          example: -122.4194
+        address:
+          type: string
+          example: 123 Main St, City
+        notes:
+          type: string
+          example: Near the park
+        is_default:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+
+    UserPlaceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/UserPlace"
+
+    UserPlaceListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            places:
+              type: array
+              items:
+                $ref: "#/components/schemas/UserPlace"
+            total:
+              type: integer
+              example: 5
+
+    CreateUserPlaceRequest:
+      type: object
+      required:
+        - place_type
+        - name
+        - latitude
+        - longitude
+      properties:
+        place_type:
+          type: string
+          enum: [home, office, school, gym, shopping, restaurant, hospital, other, custom]
+          example: home
+        name:
+          type: string
+          example: My Home
+        latitude:
+          type: number
+          format: double
+          example: 37.7749
+        longitude:
+          type: number
+          format: double
+          example: -122.4194
+        address:
+          type: string
+          example: 123 Main St, City
+        notes:
+          type: string
+          example: Near the park
+
+    UpdateUserPlaceRequest:
+      type: object
+      properties:
+        place_type:
+          type: string
+          enum: [home, office, school, gym, shopping, restaurant, hospital, other, custom]
+        name:
+          type: string
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        address:
+          type: string
+        notes:
+          type: string
+        is_default:
+          type: boolean
+
+    UserFavoriteRouteListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            routes:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  route:
+                    $ref: "#/components/schemas/Route"
+                  created_at:
+                    type: string
+                    format: date-time
+            total:
+              type: integer
+              example: 10
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 20
+
+    UserFavoriteStopListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            stops:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                    example: 1
+                  stop:
+                    $ref: "#/components/schemas/Stop"
+                  created_at:
+                    type: string
+                    format: date-time
+            total:
+              type: integer
+              example: 10
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 20
+
+    NavigationPoint:
+      type: object
+      properties:
+        place_type:
+          type: string
+          example: home
+        place_id:
+          type: integer
+          nullable: true
+        place_name:
+          type: string
+        stop_id:
+          type: integer
+          nullable: true
+        stop_name:
+          type: string
+
+    UserSavedNavigation:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Morning Commute
+        from:
+          $ref: "#/components/schemas/NavigationPoint"
+        to:
+          $ref: "#/components/schemas/NavigationPoint"
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          example: "2024-01-01T00:00:00Z"
+
+    UserSavedNavigationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: "#/components/schemas/UserSavedNavigation"
+
+    UserSavedNavigationListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            navigations:
+              type: array
+              items:
+                $ref: "#/components/schemas/UserSavedNavigation"
+            total:
+              type: integer
+              example: 5
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 20
+
+    CreateUserSavedNavigationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: Morning Commute
+        from_place_type:
+          type: string
+          example: home
+        from_place_id:
+          type: integer
+        from_stop_id:
+          type: integer
+        to_place_type:
+          type: string
+          example: office
+        to_place_id:
+          type: integer
+        to_stop_id:
+          type: integer
+
+    UpdateUserSavedNavigationRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        from_place_type:
+          type: string
+        from_place_id:
+          type: integer
+        from_stop_id:
+          type: integer
+        to_place_type:
+          type: string
+        to_place_id:
+          type: integer
+        to_stop_id:
+          type: integer
+
+    RecordRecentViewRequest:
+      type: object
+      required:
+        - view_type
+      properties:
+        view_type:
+          type: string
+          enum: [route, stop, navigation]
+          example: route
+        route_id:
+          type: integer
+        from_stop_id:
+          type: integer
+        to_stop_id:
+          type: integer
+
+    RouteStats:
+      type: object
+      properties:
+        route_id:
+          type: integer
+          example: 1
+        route_number:
+          type: string
+          example: "1A"
+        route_name:
+          type: string
+          example: "Downtown Express"
+        usage_count:
+          type: integer
+          example: 45
+
+    StopStats:
+      type: object
+      properties:
+        stop_id:
+          type: integer
+          example: 1
+        stop_name:
+          type: string
+          example: "Main Street Station"
+        visit_count:
+          type: integer
+          example: 67
+
+    UserAnalyticsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            most_frequent_route:
+              $ref: "#/components/schemas/RouteStats"
+            most_frequent_stop:
+              $ref: "#/components/schemas/StopStats"
+            total_check_ins:
+              type: integer
+              example: 150
+            total_routes_traveled:
+              type: integer
+              example: 145
+            total_unique_routes:
+              type: integer
+              example: 12
+            total_duration_seconds:
+              type: integer
+              example: 36000
+            favorite_places_count:
+              type: integer
+              example: 5
+            favorite_routes_count:
+              type: integer
+              example: 8
+            favorite_stops_count:
+              type: integer
+              example: 10
+            saved_navigations_count:
+              type: integer
+              example: 3
 
   responses:
     BadRequest:

@@ -194,6 +194,11 @@ func main() {
 	forumPostRepo := repository.NewForumPostRepository(db)
 	forumMemberRepo := repository.NewForumMemberRepository(db)
 	checkInRepo := repository.NewCheckInRepository(db)
+	// User personalized data repositories
+	userFavoriteRepo := repository.NewUserFavoriteRepository(db)
+	userPlaceRepo := repository.NewUserPlaceRepository(db)
+	userRecentViewRepo := repository.NewUserRecentViewRepository(db)
+	userSavedNavRepo := repository.NewUserSavedNavigationRepository(db)
 
 	// Initialize file storage (needed for bulk upload service and handlers)
 	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.Host, cfg.Server.Port)
@@ -258,6 +263,17 @@ func main() {
 
 	// Initialize check-in service
 	checkInService := service.NewCheckInService(checkInRepo, routeRepo, stopRepo, userRepo, reputationService, badgeService, cacheInstance)
+
+	// Initialize user personalized service
+	userPersonalizedService := service.NewUserPersonalizedService(
+		userFavoriteRepo,
+		userPlaceRepo,
+		userRecentViewRepo,
+		userSavedNavRepo,
+		userRepo,
+		routeRepo,
+		stopRepo,
+	)
 
 	// Initialize bulk upload service
 	var bulkUploadService service.BulkUploadService
@@ -332,6 +348,9 @@ func main() {
 	forumHandler := handler.NewForumHandler(forumService)
 	forumPostHandler := handler.NewForumPostHandler(forumPostService, fileStorage)
 	checkInHandler := handler.NewCheckInHandler(checkInService)
+
+	// Initialize user personalized handler
+	userPersonalizedHandler := handler.NewUserPersonalizedHandler(userPersonalizedService)
 
 	// Initialize bulk upload handler (always create, even if service is nil)
 	// This ensures routes are registered, but will return error if service unavailable
@@ -644,6 +663,60 @@ func main() {
 				checkIns.PUT("/:id/complete", checkInHandler.CompleteCheckIn)
 				checkIns.PUT("/:id", checkInHandler.UpdateCheckIn)
 				checkIns.DELETE("/:id", checkInHandler.DeleteCheckIn)
+			}
+
+			// User personalized data (private - user only accesses their own)
+			personalized := protected.Group("/users/me/personalized")
+			{
+				// Favorites
+				favorites := personalized.Group("/favorites")
+				{
+					routes := favorites.Group("/routes")
+					{
+						routes.GET("", userPersonalizedHandler.GetFavoriteRoutes)
+						routes.POST("/:routeId", userPersonalizedHandler.AddFavoriteRoute)
+						routes.DELETE("/:routeId", userPersonalizedHandler.RemoveFavoriteRoute)
+						routes.GET("/:routeId/check", userPersonalizedHandler.IsFavoriteRoute)
+					}
+					stops := favorites.Group("/stops")
+					{
+						stops.GET("", userPersonalizedHandler.GetFavoriteStops)
+						stops.POST("/:stopId", userPersonalizedHandler.AddFavoriteStop)
+						stops.DELETE("/:stopId", userPersonalizedHandler.RemoveFavoriteStop)
+						stops.GET("/:stopId/check", userPersonalizedHandler.IsFavoriteStop)
+					}
+				}
+
+				// Places
+				places := personalized.Group("/places")
+				{
+					places.GET("", userPersonalizedHandler.GetPlaces)
+					places.POST("", userPersonalizedHandler.CreatePlace)
+					places.GET("/:id", userPersonalizedHandler.GetPlace)
+					places.PUT("/:id", userPersonalizedHandler.UpdatePlace)
+					places.DELETE("/:id", userPersonalizedHandler.DeletePlace)
+				}
+
+				// Recent Views
+				recent := personalized.Group("/recent")
+				{
+					recent.GET("/routes", userPersonalizedHandler.GetRecentRoutes)
+					recent.GET("/stops", userPersonalizedHandler.GetRecentStops)
+					recent.GET("/navigations", userPersonalizedHandler.GetRecentNavigations)
+					recent.POST("/navigations", userPersonalizedHandler.RecordRecentNavigation)
+				}
+
+				// Saved Navigations
+				savedNavs := personalized.Group("/saved-navigations")
+				{
+					savedNavs.GET("", userPersonalizedHandler.GetSavedNavigations)
+					savedNavs.POST("", userPersonalizedHandler.CreateSavedNavigation)
+					savedNavs.PUT("/:id", userPersonalizedHandler.UpdateSavedNavigation)
+					savedNavs.DELETE("/:id", userPersonalizedHandler.DeleteSavedNavigation)
+				}
+
+				// Analytics
+				personalized.GET("/analytics", userPersonalizedHandler.GetAnalytics)
 			}
 		}
 	}

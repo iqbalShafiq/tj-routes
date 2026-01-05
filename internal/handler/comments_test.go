@@ -38,14 +38,14 @@ func TestGetComments(t *testing.T) {
 	// Create comments
 	commentRepo := repository.NewCommentRepository(db)
 	comment1 := &models.Comment{
-		ReportID: report.ID,
+		ReportID: &report.ID,
 		UserID:   user.ID,
 		Content:  "First comment",
 	}
 	commentRepo.Create(comment1)
 
 	comment2 := &models.Comment{
-		ReportID: report.ID,
+		ReportID: &report.ID,
 		UserID:   user.ID,
 		Content:  "Second comment",
 	}
@@ -127,7 +127,7 @@ func TestCreateComment(t *testing.T) {
 		// Create parent comment first
 		commentRepo := repository.NewCommentRepository(db)
 		parentComment := &models.Comment{
-			ReportID: report.ID,
+			ReportID: &report.ID,
 			UserID:   user.ID,
 			Content:  "Parent comment",
 		}
@@ -174,7 +174,7 @@ func TestUpdateComment(t *testing.T) {
 	// Create comment
 	commentRepo := repository.NewCommentRepository(db)
 	comment := &models.Comment{
-		ReportID: report.ID,
+		ReportID: &report.ID,
 		UserID:   user1.ID,
 		Content:  "Comment to update",
 	}
@@ -248,7 +248,7 @@ func TestDeleteComment(t *testing.T) {
 		// Create comment to delete
 		commentRepo := repository.NewCommentRepository(db)
 		comment := &models.Comment{
-			ReportID: report.ID,
+			ReportID: &report.ID,
 			UserID:   user1.ID,
 			Content:  "Comment to delete",
 		}
@@ -263,7 +263,7 @@ func TestDeleteComment(t *testing.T) {
 		// Create comment to delete
 		commentRepo := repository.NewCommentRepository(db)
 		comment := &models.Comment{
-			ReportID: report.ID,
+			ReportID: &report.ID,
 			UserID:   user1.ID,
 			Content:  "Comment to delete 2",
 		}

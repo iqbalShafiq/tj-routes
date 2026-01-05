@@ -150,7 +150,7 @@ func TestReactToComment(t *testing.T) {
 
 	commentRepo := repository.NewCommentRepository(db)
 	comment := &models.Comment{
-		ReportID: report.ID,
+		ReportID: &report.ID,
 		UserID:   user.ID,
 		Content:  "Comment to react",
 	}
@@ -217,7 +217,7 @@ func TestRemoveReactionFromComment(t *testing.T) {
 
 	commentRepo := repository.NewCommentRepository(db)
 	comment := &models.Comment{
-		ReportID: report.ID,
+		ReportID: &report.ID,
 		UserID:   user.ID,
 		Content:  "Comment to unreact",
 	}

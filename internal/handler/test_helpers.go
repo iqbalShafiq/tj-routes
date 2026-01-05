@@ -37,10 +37,10 @@ func getTestConfig() *config.Config {
 		},
 		Database: config.DatabaseConfig{
 			Host:            getEnv("TEST_DB_HOST", "localhost"),
-			Port:            getEnv("TEST_DB_PORT", "5432"),
+			Port:            getEnv("TEST_DB_PORT", "5433"),
 			User:            getEnv("TEST_DB_USER", "postgres"),
 			Password:        getEnv("TEST_DB_PASSWORD", "postgres"),
-			Name:            getEnv("TEST_DB_NAME", "tj_routes_test"),
+			Name:            getEnv("TEST_DB_NAME", "tj_routes"),
 			SSLMode:         "disable",
 			MaxOpenConns:    10,
 			MaxIdleConns:    5,
@@ -158,6 +158,11 @@ func setupTestRouter(db *gorm.DB, cfg *config.Config) *gin.Engine {
 	badgeRepo := repository.NewBadgeRepository(db)
 	userBadgeRepo := repository.NewUserBadgeRepository(db)
 	forumPostRepo := repository.NewForumPostRepository(db)
+	checkInRepo := repository.NewCheckInRepository(db)
+	userFavoriteRepo := repository.NewUserFavoriteRepository(db)
+	userPlaceRepo := repository.NewUserPlaceRepository(db)
+	userRecentViewRepo := repository.NewUserRecentViewRepository(db)
+	userSavedNavRepo := repository.NewUserSavedNavigationRepository(db)
 
 	// Initialize file storage
 	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.Host, cfg.Server.Port)
@@ -179,6 +184,11 @@ func setupTestRouter(db *gorm.DB, cfg *config.Config) *gin.Engine {
 	)
 	commentService := service.NewCommentService(commentRepo, reportRepo)
 	reactionService := service.NewReactionService(reactionRepo, reportRepo, commentRepo, reputationService)
+	_ = checkInRepo // Suppress unused warning
+	personalizedService := service.NewUserPersonalizedService(
+		userFavoriteRepo, userPlaceRepo, userRecentViewRepo, userSavedNavRepo,
+		userRepo, routeRepo, stopRepo,
+	)
 
 	// Initialize handlers
 	authHandler := NewAuthHandler(userService, cfg, cacheInstance)
@@ -192,6 +202,7 @@ func setupTestRouter(db *gorm.DB, cfg *config.Config) *gin.Engine {
 	reactionHandler := NewReactionHandler(reactionService)
 	leaderboardHandler := NewLeaderboardHandler(userRepo, badgeService, reputationService)
 	bulkUploadHandler := NewBulkUploadHandler(nil) // No bulk upload service for tests
+	userPersonalizedHandler := NewUserPersonalizedHandler(personalizedService)
 
 	// Store config in context
 	router.Use(func(c *gin.Context) {
@@ -346,6 +357,59 @@ func setupTestRouter(db *gorm.DB, cfg *config.Config) *gin.Engine {
 				bulkUpload.POST("/:entityType", bulkUploadHandler.UploadCSV)
 				bulkUpload.GET("/:id", bulkUploadHandler.GetUploadStatus)
 				bulkUpload.GET("", bulkUploadHandler.ListUploads)
+			}
+
+			// User personalized data
+			personalized := protected.Group("/users/me/personalized")
+			{
+				// Favorites - Routes
+				favoritesRoutes := personalized.Group("/favorites/routes")
+				{
+					favoritesRoutes.GET("", userPersonalizedHandler.GetFavoriteRoutes)
+					favoritesRoutes.POST("/:routeId", userPersonalizedHandler.AddFavoriteRoute)
+					favoritesRoutes.DELETE("/:routeId", userPersonalizedHandler.RemoveFavoriteRoute)
+					favoritesRoutes.GET("/:routeId/check", userPersonalizedHandler.IsFavoriteRoute)
+				}
+
+				// Favorites - Stops
+				favoritesStops := personalized.Group("/favorites/stops")
+				{
+					favoritesStops.GET("", userPersonalizedHandler.GetFavoriteStops)
+					favoritesStops.POST("/:stopId", userPersonalizedHandler.AddFavoriteStop)
+					favoritesStops.DELETE("/:stopId", userPersonalizedHandler.RemoveFavoriteStop)
+					favoritesStops.GET("/:stopId/check", userPersonalizedHandler.IsFavoriteStop)
+				}
+
+				// Places
+				places := personalized.Group("/places")
+				{
+					places.GET("", userPersonalizedHandler.GetPlaces)
+					places.POST("", userPersonalizedHandler.CreatePlace)
+					places.GET("/:id", userPersonalizedHandler.GetPlace)
+					places.PUT("/:id", userPersonalizedHandler.UpdatePlace)
+					places.DELETE("/:id", userPersonalizedHandler.DeletePlace)
+				}
+
+				// Recent Views
+				recent := personalized.Group("/recent")
+				{
+					recent.GET("/routes", userPersonalizedHandler.GetRecentRoutes)
+					recent.GET("/stops", userPersonalizedHandler.GetRecentStops)
+					recent.GET("/navigations", userPersonalizedHandler.GetRecentNavigations)
+					recent.POST("/navigations", userPersonalizedHandler.RecordRecentNavigation)
+				}
+
+				// Saved Navigations
+				savedNavs := personalized.Group("/saved-navigations")
+				{
+					savedNavs.GET("", userPersonalizedHandler.GetSavedNavigations)
+					savedNavs.POST("", userPersonalizedHandler.CreateSavedNavigation)
+					savedNavs.PUT("/:id", userPersonalizedHandler.UpdateSavedNavigation)
+					savedNavs.DELETE("/:id", userPersonalizedHandler.DeleteSavedNavigation)
+				}
+
+				// Analytics
+				personalized.GET("/analytics", userPersonalizedHandler.GetAnalytics)
 			}
 		}
 	}

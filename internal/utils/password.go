@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"regexp"
 	"strings"
 	"unicode"
 
@@ -89,10 +88,19 @@ func IsCommonPassword(password string) bool {
 		}
 	}
 
-	// Check for obvious patterns
-	pattern := regexp.MustCompile(`^(.)\1+$`)
-	if pattern.MatchString(password) {
-		return true // e.g., "aaaaa", "111111"
+	// Check for obvious patterns (all same character like "aaaaa", "111111")
+	if len(password) > 0 {
+		firstChar := password[0]
+		allSame := true
+		for i := 1; i < len(password); i++ {
+			if password[i] != firstChar {
+				allSame = false
+				break
+			}
+		}
+		if allSame {
+			return true
+		}
 	}
 
 	return false

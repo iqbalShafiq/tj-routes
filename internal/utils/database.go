@@ -82,11 +82,21 @@ func AutoMigrate(db *gorm.DB) error {
 		&models.ForumPost{},
 		&models.ForumMember{},
 		&models.ForumPostHashtag{},
+		&models.ForumMember{},
 		&models.CheckIn{},
 		&models.UserFavorite{},
 		&models.UserPlace{},
 		&models.UserRecentView{},
 		&models.UserSavedNavigation{},
+		&models.Conversation{},
+		&models.ConversationParticipant{},
+		&models.ChatRequest{},
+		&models.GroupChat{},
+		&models.GroupMember{},
+		&models.GroupInvite{},
+		&models.ForumMessage{},
+		&models.Message{},
+		&models.MessageReaction{},
 	); err != nil {
 		return err
 	}
@@ -141,7 +151,7 @@ func EnsureSystemUser(db *gorm.DB) (uint, error) {
 
 	var systemUser models.User
 	err := db.Where("email = ?", systemUserEmail).First(&systemUser).Error
-	
+
 	if err == nil {
 		// System user already exists
 		return systemUser.ID, nil

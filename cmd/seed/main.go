@@ -110,6 +110,13 @@ func main() {
 	forumRepo := repository.NewForumRepository(db)
 	forumPostRepo := repository.NewForumPostRepository(db)
 	forumMemberRepo := repository.NewForumMemberRepository(db)
+	conversationRepo := repository.NewConversationRepository(db)
+	chatRequestRepo := repository.NewChatRequestRepository(db)
+	groupChatRepo := repository.NewGroupChatRepository(db)
+	groupMemberRepo := repository.NewGroupMemberRepository(db)
+	groupInviteRepo := repository.NewGroupInviteRepository(db)
+	messageRepo := repository.NewMessageRepository(db)
+	forumMessageRepo := repository.NewForumMessageRepository(db)
 
 	// Seed badges first
 	if err := seedBadges(badgeRepo); err != nil {
@@ -179,6 +186,11 @@ func main() {
 	// Seed bulk upload logs
 	if err := seedBulkUploadLogs(bulkUploadLogRepo, userRepo); err != nil {
 		log.Fatalf("Failed to seed bulk upload logs: %v", err)
+	}
+
+	// Seed chat data
+	if err := seedChatData(db, conversationRepo, chatRequestRepo, groupChatRepo, groupMemberRepo, groupInviteRepo, messageRepo, forumMessageRepo, forumRepo, userFollowRepo, userRepo); err != nil {
+		log.Fatalf("Failed to seed chat data: %v", err)
 	}
 
 	fmt.Println("✅ Database seeding completed successfully!")
@@ -2155,4 +2167,337 @@ func getPostTypeTitle(postType models.PostType) string {
 	default:
 		return "Post"
 	}
+}
+
+func seedChatData(
+	db *gorm.DB,
+	conversationRepo repository.ConversationRepository,
+	chatRequestRepo repository.ChatRequestRepository,
+	groupChatRepo repository.GroupChatRepository,
+	groupMemberRepo repository.GroupMemberRepository,
+	groupInviteRepo repository.GroupInviteRepository,
+	messageRepo repository.MessageRepository,
+	forumMessageRepo repository.ForumMessageRepository,
+	forumRepo repository.ForumRepository,
+	userFollowRepo repository.UserFollowRepository,
+	userRepo repository.UserRepository,
+) error {
+	fmt.Println("\n💬 Seeding chat data...")
+
+	users, _, err := userRepo.List(0, 100)
+	if err != nil {
+		return fmt.Errorf("failed to list users: %w", err)
+	}
+
+	if len(users) < 2 {
+		fmt.Println("  ⚠ Not enough users, skipping chat seeding")
+		return nil
+	}
+
+	// Find user@example.com as test user
+	var testUser *models.User
+	for i := range users {
+		if users[i].Email == "user@example.com" {
+			testUser = &users[i]
+			break
+		}
+	}
+	if testUser == nil {
+		testUser = &users[0]
+		fmt.Printf("  ⚠ user@example.com not found, using %s as test user\n", testUser.Username)
+	} else {
+		fmt.Printf("  ✓ Found test user: %s (ID: %d)\n", testUser.Username, testUser.ID)
+	}
+
+	// Get other users (excluding testUser)
+	var otherUsers []models.User
+	for _, u := range users {
+		if u.ID != testUser.ID {
+			otherUsers = append(otherUsers, u)
+		}
+	}
+
+	if len(otherUsers) < 3 {
+		fmt.Printf("  ⚠ Need at least 3 other users, found %d\n", len(otherUsers))
+		return nil
+	}
+
+	fmt.Printf("  ✓ Found %d other users\n", len(otherUsers))
+
+	// Helper function for min
+	min := func(a, b int) int {
+		if a < b {
+			return a
+		}
+		return b
+	}
+
+	// STEP 1: Create follow relationships (mutual follows)
+	fmt.Println("  Creating follow relationships...")
+	followCount := 0
+	for i := 0; i < min(3, len(otherUsers)); i++ {
+		otherUser := &otherUsers[i]
+
+		// Check if already following
+		existingFollow, _ := userFollowRepo.IsFollowing(testUser.ID, otherUser.ID)
+		if !existingFollow {
+			follow := &models.UserFollow{
+				FollowerID:  testUser.ID,
+				FollowingID: otherUser.ID,
+			}
+			if err := userFollowRepo.Create(follow); err != nil {
+				fmt.Printf("  ⚠ Warning: Failed to create follow (testUser->%s): %v\n", otherUser.Username, err)
+			} else {
+				followCount++
+			}
+		}
+
+		// Mutual: otherUser follows testUser
+		existingFollow2, _ := userFollowRepo.IsFollowing(otherUser.ID, testUser.ID)
+		if !existingFollow2 {
+			follow2 := &models.UserFollow{
+				FollowerID:  otherUser.ID,
+				FollowingID: testUser.ID,
+			}
+			if err := userFollowRepo.Create(follow2); err != nil {
+				fmt.Printf("  ⚠ Warning: Failed to create follow (%s->testUser): %v\n", otherUser.Username, err)
+			} else {
+				followCount++
+			}
+		}
+	}
+	fmt.Printf("    ✓ Created %d follow relationships\n", followCount)
+
+	// STEP 2: Create chat requests (to users we're NOT following, but for demo, let's create some)
+	fmt.Println("  Creating chat requests...")
+	requestCount := 0
+	for i := 3; i < min(6, len(otherUsers)); i++ {
+		otherUser := &otherUsers[i]
+
+		// Check if request already exists
+		existingReq, _, _ := chatRequestRepo.ListSent(testUser.ID, 0, 10)
+		alreadyExists := false
+		for _, req := range existingReq {
+			if req.ReceiverID == otherUser.ID {
+				alreadyExists = true
+				break
+			}
+		}
+		if alreadyExists {
+			continue
+		}
+
+		req := &models.ChatRequest{
+			SenderID:   testUser.ID,
+			ReceiverID: otherUser.ID,
+			Message:    fmt.Sprintf("Hi %s! I'd like to connect with you!", otherUser.Username),
+			Status:     "pending",
+		}
+		if err := chatRequestRepo.Create(req); err != nil {
+			continue
+		}
+		requestCount++
+	}
+	fmt.Printf("    ✓ Created %d chat requests\n", requestCount)
+
+	// STEP 3: Create conversations with users we're following
+	fmt.Println("  Creating conversations...")
+	conversationCount := 0
+	participantCount := 0
+	messageCount := 0
+
+	for i := 0; i < min(3, len(otherUsers)); i++ {
+		otherUser := &otherUsers[i]
+
+		// Check if conversation already exists
+		existingConv, _ := conversationRepo.FindByUsers(testUser.ID, otherUser.ID)
+		if existingConv != nil {
+			fmt.Printf("    Conversation between %s and %s already exists\n", testUser.Username, otherUser.Username)
+			continue
+		}
+
+		conv := &models.Conversation{
+			Type: "direct",
+		}
+		if err := conversationRepo.Create(conv); err != nil {
+			fmt.Printf("  ⚠ Warning: Failed to create conversation: %v\n", err)
+			continue
+		}
+
+		// Add participants
+		p1 := &models.ConversationParticipant{
+			ConversationID: conv.ID,
+			UserID:         testUser.ID,
+			JoinedAt:       time.Now(),
+		}
+		p2 := &models.ConversationParticipant{
+			ConversationID: conv.ID,
+			UserID:         otherUser.ID,
+			JoinedAt:       time.Now(),
+		}
+		if err := conversationRepo.AddParticipant(p1); err != nil {
+			fmt.Printf("  ⚠ Warning: Failed to add participant: %v\n", err)
+		}
+		if err := conversationRepo.AddParticipant(p2); err != nil {
+			fmt.Printf("  ⚠ Warning: Failed to add participant: %v\n", err)
+		}
+		participantCount += 2
+
+		// Add messages
+		messages := []string{
+			fmt.Sprintf("Hi %s! How are you doing?", otherUser.Username),
+			fmt.Sprintf("Hey %s! I'm doing great, thanks for asking!", testUser.Username),
+			fmt.Sprintf("Have you tried the new TransJakarta route updates?"),
+			"Yes, I saw the changes on Corridor 1. Much better now!",
+			"I agree. The new buses are really comfortable.",
+		}
+
+		for j, content := range messages {
+			senderID := testUser.ID
+			if j%2 == 1 {
+				senderID = otherUser.ID
+			}
+			msg := &models.Message{
+				Content:        content,
+				SenderID:       senderID,
+				ConversationID: &conv.ID,
+				MessageType:    "text",
+				Status:         "sent",
+			}
+			if err := messageRepo.Create(msg); err != nil {
+				continue
+			}
+			messageCount++
+		}
+
+		conversationCount++
+	}
+	fmt.Printf("    ✓ Created %d conversations with %d participants\n", conversationCount, participantCount)
+	fmt.Printf("    ✓ Created %d messages\n", messageCount)
+
+	// STEP 4: Create groups
+	fmt.Println("  Creating group chats...")
+	groupCount := 0
+	groupMemberCount := 0
+	groupMessageCount := 0
+
+	groups := []struct {
+		name        string
+		description string
+		groupType   string
+		maxMembers  int
+	}{
+		{"TransJakarta Enthusiasts", "A community for TransJakarta lovers to share tips and experiences", "public", 50},
+		{"Morning Commuters", "Tips and tricks for beating the morning rush", "public", 30},
+		{"Route 6R Fans", "All about Route 6R - the premium service", "restricted", 25},
+	}
+
+	for _, g := range groups {
+		// Check if group already exists
+		existingGroups, _, _ := groupChatRepo.ListByUserID(testUser.ID, 0, 100)
+		alreadyExists := false
+		for _, eg := range existingGroups {
+			if eg.Name == g.name {
+				alreadyExists = true
+				break
+			}
+		}
+		if alreadyExists {
+			continue
+		}
+
+		group := &models.GroupChat{
+			Name:        g.name,
+			Description: g.description,
+			Type:        g.groupType,
+			MaxMembers:  g.maxMembers,
+			CreatedByID: testUser.ID,
+		}
+		if err := groupChatRepo.Create(group); err != nil {
+			continue
+		}
+
+		// Add members (test user as admin, plus a few others from otherUsers)
+		var memberUserIDs []uint
+		memberUserIDs = append(memberUserIDs, testUser.ID)
+		for j := 1; j < min(4, len(otherUsers)+1); j++ {
+			memberUserIDs = append(memberUserIDs, otherUsers[j-1].ID)
+		}
+
+		for j, userID := range memberUserIDs {
+			role := "member"
+			if j == 0 {
+				role = "admin"
+			}
+			member := &models.GroupMember{
+				GroupID:  group.ID,
+				UserID:   userID,
+				Role:     role,
+				JoinedAt: time.Now(),
+			}
+			if err := groupMemberRepo.Create(member); err != nil {
+				continue
+			}
+			groupMemberCount++
+		}
+
+		// Add group messages
+		messages := []string{
+			fmt.Sprintf("Welcome to %s!", group.Name),
+			"Thanks for creating this group!",
+			"Excited to be here! TransJakarta rocks!",
+			"Has anyone tried the new buses on this route?",
+		}
+
+		for j, content := range messages {
+			senderID := testUser.ID
+			if j > 0 && j < len(memberUserIDs) {
+				senderID = memberUserIDs[j]
+			}
+			msg := &models.Message{
+				Content:     content,
+				SenderID:    senderID,
+				GroupID:     &group.ID,
+				MessageType: "text",
+				Status:      "sent",
+			}
+			if err := messageRepo.Create(msg); err != nil {
+				continue
+			}
+			groupMessageCount++
+		}
+
+		groupCount++
+	}
+	fmt.Printf("    ✓ Created %d groups with %d members\n", groupCount, groupMemberCount)
+	fmt.Printf("    ✓ Created %d group messages\n", groupMessageCount)
+
+	// STEP 5: Seed forum messages (for forums created in seedForums)
+	fmt.Println("  Creating forum messages...")
+	forumMessageCount := 0
+	var forums []models.Forum
+	if err := db.Preload("Route").Find(&forums).Error; err == nil && len(forums) > 0 {
+		for _, forum := range forums {
+			forumName := "Unknown Forum"
+			if forum.Route.RouteNumber != "" {
+				forumName = fmt.Sprintf("Route %s", forum.Route.RouteNumber)
+			}
+			for i := 0; i < 3; i++ {
+				sender := users[i%len(users)]
+				msg := &models.ForumMessage{
+					ForumID: forum.ID,
+					UserID:  sender.ID,
+					Content: fmt.Sprintf("This is a sample forum message %d for %s!", i+1, forumName),
+				}
+				if err := forumMessageRepo.Create(msg); err != nil {
+					continue
+				}
+				forumMessageCount++
+			}
+		}
+	}
+	fmt.Printf("    ✓ Created %d forum messages\n", forumMessageCount)
+
+	fmt.Println("  ✓ Chat data seeding completed")
+	return nil
 }

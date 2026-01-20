@@ -50,3 +50,7 @@ uploads/
 
 # api
 api
+
+# Claude Code
+CLAUDE.md
+.claude-guides/

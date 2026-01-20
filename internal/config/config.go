@@ -19,6 +19,20 @@ type Config struct {
 	JobQueue    JobQueueConfig
 	Security    SecurityConfig
 	TLS         TLSConfig
+	WebSocket   WebSocketConfig
+	Chat        ChatConfig
+	Email       EmailConfig
+}
+
+type EmailConfig struct {
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
+	SMTPUseTLS   bool
+	FromAddress  string
+	FrontendURL  string // For password reset links
+	SupportEmail string
 }
 
 type ServerConfig struct {
@@ -32,10 +46,33 @@ type ServerConfig struct {
 
 // TLSConfig contains TLS/SSL configuration
 type TLSConfig struct {
-	Enabled     bool   // Enable TLS
-	CertFile    string // Path to certificate file
-	KeyFile     string // Path to private key file
-	MinVersion  string // Minimum TLS version (e.g., "1.2", "1.3")
+	Enabled    bool   // Enable TLS
+	CertFile   string // Path to certificate file
+	KeyFile    string // Path to private key file
+	MinVersion string // Minimum TLS version (e.g., "1.2", "1.3")
+}
+
+type WebSocketConfig struct {
+	Enabled         bool
+	ReadBufferSize  int
+	WriteBufferSize int
+	PingPeriod      time.Duration
+	PongWait        time.Duration
+	MaxMessageSize  int64
+}
+
+type ChatConfig struct {
+	MaxDirectConversations int
+	MaxGroupMembers        int
+	MaxGroupMembersPerUser int
+	MessageMaxLength       int
+	InviteExpiryHours      int
+	ForumChatEnabled       bool
+	ForumChatMaxMessages   int
+	ForumChatCleanupHours  int
+	RateLimitMessages      int
+	RateLimitConversations int
+	RateLimitGroups        int
 }
 
 type DatabaseConfig struct {
@@ -102,26 +139,26 @@ type RedisConfig struct {
 }
 
 type CacheConfig struct {
-	Enabled           bool
-	RouteTTL          int // TTL in minutes
-	StopTTL           int // TTL in minutes
-	VehicleTTL        int // TTL in minutes
-	SystemUserTTL     int // TTL in minutes
+	Enabled       bool
+	RouteTTL      int // TTL in minutes
+	StopTTL       int // TTL in minutes
+	VehicleTTL    int // TTL in minutes
+	SystemUserTTL int // TTL in minutes
 }
 
 type FileStorageConfig struct {
-	StorageType      string   // "local" or "cloud" (default: "local")
-	UploadPath       string   // Base directory for local uploads (default: "./uploads")
-	MaxPhotoSize     int64    // Max size for photos in bytes (default: 5MB)
-	MaxPDFSize       int64    // Max size for PDFs in bytes (default: 10MB)
+	StorageType       string   // "local" or "cloud" (default: "local")
+	UploadPath        string   // Base directory for local uploads (default: "./uploads")
+	MaxPhotoSize      int64    // Max size for photos in bytes (default: 5MB)
+	MaxPDFSize        int64    // Max size for PDFs in bytes (default: 10MB)
 	AllowedPhotoMIMEs []string // Allowed MIME types for photos
-	AllowedPDFMIMEs  []string // Allowed MIME types for PDFs
+	AllowedPDFMIMEs   []string // Allowed MIME types for PDFs
 	// Cloud storage config (optional, only if StorageType is "cloud")
-	CloudProvider    string   // "s3", "gcs", "azure" (optional)
-	CloudBucket      string   // Cloud storage bucket name (optional)
-	CloudRegion      string   // Cloud storage region (optional)
-	CloudAccessKey   string   // Cloud storage access key (optional)
-	CloudSecretKey   string   // Cloud storage secret key (optional)
+	CloudProvider  string // "s3", "gcs", "azure" (optional)
+	CloudBucket    string // Cloud storage bucket name (optional)
+	CloudRegion    string // Cloud storage region (optional)
+	CloudAccessKey string // Cloud storage access key (optional)
+	CloudSecretKey string // Cloud storage secret key (optional)
 }
 
 type JobQueueConfig struct {
@@ -183,23 +220,23 @@ func Load() (*Config, error) {
 		},
 		Cache: CacheConfig{
 			Enabled:       getEnvAsBool("CACHE_ENABLED", true),
-			RouteTTL:      getEnvAsInt("CACHE_ROUTE_TTL", 30),      // 30 minutes
-			StopTTL:       getEnvAsInt("CACHE_STOP_TTL", 60),       // 1 hour
-			VehicleTTL:    getEnvAsInt("CACHE_VEHICLE_TTL", 15),    // 15 minutes
+			RouteTTL:      getEnvAsInt("CACHE_ROUTE_TTL", 30),         // 30 minutes
+			StopTTL:       getEnvAsInt("CACHE_STOP_TTL", 60),          // 1 hour
+			VehicleTTL:    getEnvAsInt("CACHE_VEHICLE_TTL", 15),       // 15 minutes
 			SystemUserTTL: getEnvAsInt("CACHE_SYSTEM_USER_TTL", 1440), // 24 hours
 		},
 		FileStorage: FileStorageConfig{
-			StorageType:      getEnv("FILE_STORAGE_TYPE", "local"),
+			StorageType:       getEnv("FILE_STORAGE_TYPE", "local"),
 			UploadPath:        getEnv("FILE_UPLOAD_PATH", "./uploads"),
-			MaxPhotoSize:     int64(getEnvAsInt("FILE_MAX_PHOTO_SIZE_MB", 5)) * 1024 * 1024, // Convert MB to bytes
-			MaxPDFSize:       int64(getEnvAsInt("FILE_MAX_PDF_SIZE_MB", 10)) * 1024 * 1024,  // Convert MB to bytes
+			MaxPhotoSize:      int64(getEnvAsInt("FILE_MAX_PHOTO_SIZE_MB", 5)) * 1024 * 1024, // Convert MB to bytes
+			MaxPDFSize:        int64(getEnvAsInt("FILE_MAX_PDF_SIZE_MB", 10)) * 1024 * 1024,  // Convert MB to bytes
 			AllowedPhotoMIMEs: []string{"image/jpeg", "image/png", "image/webp", "image/gif"},
 			AllowedPDFMIMEs:   []string{"application/pdf"},
-			CloudProvider:    getEnv("FILE_CLOUD_PROVIDER", ""),
-			CloudBucket:      getEnv("FILE_CLOUD_BUCKET", ""),
-			CloudRegion:      getEnv("FILE_CLOUD_REGION", ""),
-			CloudAccessKey:   getEnv("FILE_CLOUD_ACCESS_KEY", ""),
-			CloudSecretKey:   getEnv("FILE_CLOUD_SECRET_KEY", ""),
+			CloudProvider:     getEnv("FILE_CLOUD_PROVIDER", ""),
+			CloudBucket:       getEnv("FILE_CLOUD_BUCKET", ""),
+			CloudRegion:       getEnv("FILE_CLOUD_REGION", ""),
+			CloudAccessKey:    getEnv("FILE_CLOUD_ACCESS_KEY", ""),
+			CloudSecretKey:    getEnv("FILE_CLOUD_SECRET_KEY", ""),
 		},
 		JobQueue: JobQueueConfig{
 			JobTimeoutMinutes:        getEnvAsInt("JOB_QUEUE_TIMEOUT_MINUTES", 5),
@@ -216,6 +253,37 @@ func Load() (*Config, error) {
 			CertFile:   getEnv("TLS_CERT_FILE", ""),
 			KeyFile:    getEnv("TLS_KEY_FILE", ""),
 			MinVersion: getEnv("TLS_MIN_VERSION", "1.3"),
+		},
+		WebSocket: WebSocketConfig{
+			Enabled:         getEnvAsBool("WS_ENABLED", true),
+			ReadBufferSize:  getEnvAsInt("WS_READ_BUFFER_SIZE", 4096),
+			WriteBufferSize: getEnvAsInt("WS_WRITE_BUFFER_SIZE", 4096),
+			PingPeriod:      time.Duration(getEnvAsInt("WS_PING_PERIOD_SECONDS", 54)) * time.Second,
+			PongWait:        time.Duration(getEnvAsInt("WS_PONG_WAIT_SECONDS", 60)) * time.Second,
+			MaxMessageSize:  int64(getEnvAsInt("WS_MAX_MESSAGE_SIZE", 512)),
+		},
+		Chat: ChatConfig{
+			MaxDirectConversations: getEnvAsInt("CHAT_MAX_DIRECT_CONVERSATIONS", 100),
+			MaxGroupMembers:        getEnvAsInt("CHAT_MAX_GROUP_MEMBERS", 500),
+			MaxGroupMembersPerUser: getEnvAsInt("CHAT_MAX_GROUP_MEMBERS_PER_USER", 50),
+			MessageMaxLength:       getEnvAsInt("CHAT_MESSAGE_MAX_LENGTH", 10000),
+			InviteExpiryHours:      getEnvAsInt("CHAT_INVITE_EXPIRY_HOURS", 24),
+			ForumChatEnabled:       getEnvAsBool("FORUM_CHAT_ENABLED", true),
+			ForumChatMaxMessages:   getEnvAsInt("FORUM_CHAT_MAX_MESSAGES_PER_LOAD", 100),
+			ForumChatCleanupHours:  getEnvAsInt("FORUM_CHAT_CLEANUP_INTERVAL_HOURS", 1),
+			RateLimitMessages:      getEnvAsInt("RATE_LIMIT_CHAT_MESSAGES_PER_MINUTE", 30),
+			RateLimitConversations: getEnvAsInt("RATE_LIMIT_CHAT_CONVERSATIONS_PER_MINUTE", 10),
+			RateLimitGroups:        getEnvAsInt("RATE_LIMIT_CHAT_GROUPS_PER_MINUTE", 5),
+		},
+		Email: EmailConfig{
+			SMTPHost:     getEnv("SMTP_HOST", ""),
+			SMTPPort:     getEnvAsInt("SMTP_PORT", 587),
+			SMTPUsername: getEnv("SMTP_USERNAME", ""),
+			SMTPPassword: getEnv("SMTP_PASSWORD", ""),
+			SMTPUseTLS:   getEnvAsBool("SMTP_USE_TLS", true),
+			FromAddress:  getEnv("SMTP_FROM_ADDRESS", ""),
+			FrontendURL:  getEnv("FRONTEND_URL", "http://localhost:3000"),
+			SupportEmail: getEnv("SUPPORT_EMAIL", ""),
 		},
 	}
 

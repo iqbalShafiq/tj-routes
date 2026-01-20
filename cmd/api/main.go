@@ -15,10 +15,12 @@ import (
 
 	"tj-routes/internal/config"
 	"tj-routes/internal/handler"
+	jobs "tj-routes/internal/jobs"
 	"tj-routes/internal/middleware"
 	"tj-routes/internal/repository"
 	"tj-routes/internal/service"
 	"tj-routes/internal/utils"
+	"tj-routes/internal/websocket"
 
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -174,6 +176,18 @@ func main() {
 		logger.Warn("Failed to initialize Redis cache, continuing without cache", zap.Error(err))
 	}
 
+	// Initialize chat rate limiters
+	middleware.InitChatRateLimiters(
+		cfg.Chat.RateLimitMessages,
+		cfg.Chat.RateLimitConversations,
+		cfg.Chat.RateLimitGroups,
+	)
+	logger.Info("Chat rate limiters initialized",
+		zap.Int("messages_per_minute", cfg.Chat.RateLimitMessages),
+		zap.Int("conversations_per_minute", cfg.Chat.RateLimitConversations),
+		zap.Int("groups_per_minute", cfg.Chat.RateLimitGroups),
+	)
+
 	// Initialize repositories
 	userRepo := repository.NewUserRepository(db)
 	stopRepo := repository.NewStopRepository(db)
@@ -193,12 +207,22 @@ func main() {
 	forumRepo := repository.NewForumRepository(db)
 	forumPostRepo := repository.NewForumPostRepository(db)
 	forumMemberRepo := repository.NewForumMemberRepository(db)
+	forumMessageRepo := repository.NewForumMessageRepository(db)
 	checkInRepo := repository.NewCheckInRepository(db)
 	// User personalized data repositories
 	userFavoriteRepo := repository.NewUserFavoriteRepository(db)
 	userPlaceRepo := repository.NewUserPlaceRepository(db)
 	userRecentViewRepo := repository.NewUserRecentViewRepository(db)
 	userSavedNavRepo := repository.NewUserSavedNavigationRepository(db)
+
+	// Chat repositories
+	conversationRepo := repository.NewConversationRepository(db)
+	chatRequestRepo := repository.NewChatRequestRepository(db)
+	messageRepo := repository.NewMessageRepository(db)
+	groupChatRepo := repository.NewGroupChatRepository(db)
+	groupMemberRepo := repository.NewGroupMemberRepository(db)
+	groupInviteRepo := repository.NewGroupInviteRepository(db)
+	messageReactionRepo := repository.NewMessageReactionRepository(db)
 
 	// Initialize file storage (needed for bulk upload service and handlers)
 	baseURL := fmt.Sprintf("http://%s:%s", cfg.Server.Host, cfg.Server.Port)
@@ -223,25 +247,39 @@ func main() {
 		logger.Info("Job queue client initialized successfully")
 	}
 
+	// Initialize email service for password reset
+	emailService := utils.NewEmailService(&cfg.Email, logger)
+	if emailService.IsConfigured() {
+		logger.Info("Email service initialized with SMTP",
+			zap.String("host", cfg.Email.SMTPHost),
+			zap.Int("port", cfg.Email.SMTPPort))
+	} else {
+		logger.Warn("Email service not configured - password reset emails will be skipped",
+			zap.String("hint", "Set SMTP_HOST, SMTP_PORT, and SMTP_FROM_ADDRESS in .env"))
+	}
+
+	// Initialize token blacklist service
+	tokenBlacklistService := utils.NewTokenBlacklistService(cacheInstance, &cfg.JWT)
+
 	// Initialize services with cache
-	userService := service.NewUserService(userRepo, cfg, cacheInstance)
+	userService := service.NewUserServiceWithPasswordReset(userRepo, cfg, cacheInstance, emailService, tokenBlacklistService)
 	stopService := service.NewStopService(stopRepo, cacheInstance, cfg)
 	routeService := service.NewRouteService(routeRepo, routeStopRepo, stopRepo, routeChangeRepo, reportRepo, forumPostRepo, cacheInstance, cfg)
 	vehicleService := service.NewVehicleService(vehicleRepo, routeRepo, cacheInstance, cfg)
-	
+
 	// Initialize reputation and badge services
 	reputationService := service.NewReputationService(userRepo)
 	badgeService := service.NewBadgeServiceWithCheckIn(badgeRepo, userBadgeRepo, userRepo, reportRepo, commentRepo, reactionRepo, checkInRepo)
-	
+
 	// Initialize user follow service
 	userFollowService := service.NewUserFollowService(userFollowRepo, userRepo)
-	
+
 	// Initialize hashtag service
 	hashtagService := service.NewHashtagService(hashtagRepo)
-	
+
 	// Initialize report category service
 	reportCategoryService := service.NewReportCategoryService(reportCategoryRepo)
-	
+
 	// Initialize report service with social features (hashtags, follows, reputation)
 	reportService := service.NewReportServiceWithSocial(
 		reportRepo,
@@ -252,11 +290,11 @@ func main() {
 		reputationService,
 		badgeService,
 	)
-	
+
 	// Initialize forum services
 	forumService := service.NewForumService(forumRepo, forumMemberRepo, routeRepo)
 	forumPostService := service.NewForumPostService(forumPostRepo, forumRepo, forumMemberRepo, reportRepo)
-	
+
 	// Initialize comment and reaction services (with forum post support)
 	commentService := service.NewCommentServiceWithForumPost(commentRepo, reportRepo, forumPostRepo)
 	reactionService := service.NewReactionServiceWithForumPost(reactionRepo, reportRepo, commentRepo, forumPostRepo, reputationService)
@@ -274,6 +312,60 @@ func main() {
 		routeRepo,
 		stopRepo,
 	)
+
+	// Initialize chat services
+	conversationService := service.NewConversationService(
+		conversationRepo,
+		messageRepo,
+		userFollowRepo,
+		userRepo,
+		cacheInstance,
+		cfg,
+	)
+
+	chatRequestService := service.NewChatRequestService(
+		chatRequestRepo,
+		conversationRepo,
+		conversationService,
+		userFollowRepo,
+		userRepo,
+		cacheInstance,
+		cfg,
+	)
+
+	messageService := service.NewMessageService(
+		messageRepo,
+		conversationRepo,
+		groupChatRepo,
+		groupMemberRepo,
+		cacheInstance,
+		cfg,
+	)
+
+	messageReactionService := service.NewMessageReactionService(
+		messageReactionRepo,
+		messageRepo,
+	)
+
+	// Forum message service
+	forumMessageService := service.NewForumMessageService(forumMessageRepo, forumMemberRepo, cacheInstance, cfg)
+
+	// WebSocket hub
+	wsHub := websocket.NewHub(context.Background(), cacheInstance)
+	go wsHub.Run() // Start the hub's event loop
+
+	// Initialize WebSocket upgrader with config
+	websocket.InitUpgrader(cfg)
+
+	// Set services for WebSocket message handling
+	wsHub.SetServices(messageService, conversationService, forumMessageService)
+
+	// Initialize bulk upload service
+
+	// Initialize group chat services
+	groupChatService := service.NewGroupChatService(groupChatRepo, groupMemberRepo, userRepo, cacheInstance, cfg)
+	groupMemberService := service.NewGroupMemberService(groupChatRepo, groupMemberRepo, groupChatService, cacheInstance, cfg)
+	groupInviteService := service.NewGroupInviteService(groupChatRepo, groupMemberRepo, groupInviteRepo, groupChatService, groupMemberService, cacheInstance, cfg)
 
 	// Initialize bulk upload service
 	var bulkUploadService service.BulkUploadService
@@ -311,6 +403,33 @@ func main() {
 			// Register bulk upload handler
 			jobQueueServer.RegisterBulkUploadHandler(bulkUploadProcessor.ProcessBulkUpload)
 
+			// Initialize background job processors
+			forumChatCleanupJob := jobs.NewForumChatCleanupJob(forumMessageRepo, logger)
+			inviteExpiryJob := jobs.NewInviteExpiryJob(groupInviteRepo, logger)
+
+			// Schedule periodic jobs
+			go func() {
+				ticker := time.NewTicker(time.Hour)
+				defer ticker.Stop()
+
+				for range ticker.C {
+					ctx := context.Background()
+					logger.Info("Running forum chat cleanup job")
+					forumChatCleanupJob.Execute(ctx)
+				}
+			}()
+
+			go func() {
+				ticker := time.NewTicker(6 * time.Hour)
+				defer ticker.Stop()
+
+				for range ticker.C {
+					ctx := context.Background()
+					logger.Info("Running invite expiry job")
+					inviteExpiryJob.Execute(ctx)
+				}
+			}()
+
 			// Start job queue server in background
 			go func() {
 				logger.Info("Starting job queue server")
@@ -347,7 +466,20 @@ func main() {
 	reportCategoryHandler := handler.NewReportCategoryHandler(reportCategoryService)
 	forumHandler := handler.NewForumHandler(forumService)
 	forumPostHandler := handler.NewForumPostHandler(forumPostService, fileStorage)
+	forumMessageHandler := handler.NewForumMessageHandler(forumMessageService)
 	checkInHandler := handler.NewCheckInHandler(checkInService)
+	groupChatHandler := handler.NewGroupChatHandler(groupChatService, groupMemberService)
+	groupMemberHandler := handler.NewGroupMemberHandler(groupMemberService)
+	groupInviteHandler := handler.NewGroupInviteHandler(groupInviteService)
+
+	// Initialize chat handlers
+	conversationHandler := handler.NewConversationHandler(conversationService)
+	chatRequestHandler := handler.NewChatRequestHandler(chatRequestService)
+	messageHandler := handler.NewMessageHandler(messageService)
+	messageReactionHandler := handler.NewMessageReactionHandler(messageReactionService)
+
+	// WebSocket handler
+	wsHandler := websocket.NewWebSocketHandler(wsHub, cfg)
 
 	// Initialize user personalized handler
 	userPersonalizedHandler := handler.NewUserPersonalizedHandler(userPersonalizedService)
@@ -451,6 +583,16 @@ func main() {
 			auth.POST("/login", authHandler.Login)
 			auth.GET("/oauth/:provider", authHandler.OAuthInitiate)
 			auth.GET("/oauth/:provider/callback", authHandler.OAuthCallback)
+			// Password reset (public)
+			auth.POST("/forgot-password", authHandler.ForgotPassword)
+			auth.POST("/reset-password", authHandler.ResetPassword)
+		}
+
+		// Auth routes (protected)
+		authProtected := v1.Group("/auth")
+		authProtected.Use(middleware.AuthMiddleware(cfg))
+		{
+			authProtected.POST("/change-password", authHandler.ChangePassword)
 		}
 
 		// Public routes (guest-accessible with optional auth)
@@ -553,51 +695,52 @@ func main() {
 				// Note: /feed, /trending, /stories, and /:id are handled in public group with OptionalAuthMiddleware
 				reports.PUT("/:id/status", middleware.RequireAdmin(), reportHandler.UpdateReportStatus)
 				reports.DELETE("/:id", middleware.RequireAdmin(), reportHandler.DeleteReport)
-				
+
 				// Report comments
 				reports.GET("/:id/comments", commentHandler.GetComments)
 				reports.POST("/:id/comments", commentHandler.CreateComment)
-				
+
 				// Report reactions
 				reports.POST("/:id/react", reactionHandler.ReactToReport)
 				reports.DELETE("/:id/react", reactionHandler.RemoveReactionFromReport)
 			}
-			
+
 			// Comments
 			comments := protected.Group("/comments")
 			{
 				comments.PUT("/:id", commentHandler.UpdateComment)
 				comments.DELETE("/:id", commentHandler.DeleteComment)
-				
+
 				// Comment reactions
 				comments.POST("/:id/react", reactionHandler.ReactToComment)
 				comments.DELETE("/:id/react", reactionHandler.RemoveReactionFromComment)
 			}
-			
+
 			// Leaderboard and badges
 			leaderboard := protected.Group("/leaderboard")
 			{
 				leaderboard.GET("", leaderboardHandler.GetLeaderboard)
 			}
-			
+
 			badges := protected.Group("/badges")
 			{
 				badges.GET("", leaderboardHandler.GetAllBadges)
 			}
-			
+
 			// Users
 			users := protected.Group("/users")
 			{
 				// Public profile endpoint (authenticated users can view any profile)
 				users.GET("/:id/profile", leaderboardHandler.GetUserProfile)
-				
+
 				// User follow endpoints
 				users.POST("/:id/follow", userFollowHandler.FollowUser)
 				users.DELETE("/:id/follow", userFollowHandler.UnfollowUser)
 				users.GET("/:id/followers", userFollowHandler.GetFollowers)
 				users.GET("/:id/following", userFollowHandler.GetFollowing)
 				users.GET("/:id/follow-status", userFollowHandler.GetFollowStatus)
-				
+				users.GET("/:id/friends", userFollowHandler.GetFriends)
+
 				// Admin-only endpoints
 				adminUsers := users.Group("")
 				adminUsers.Use(middleware.RequireAdmin())
@@ -631,7 +774,13 @@ func main() {
 				forums.POST("/:id/join", forumHandler.JoinForum)
 				forums.DELETE("/:id/leave", forumHandler.LeaveForum)
 				forums.GET("/:id/membership", forumHandler.CheckMembership)
-				
+				// Forum chat messages
+				forums.GET("/:id/messages", forumMessageHandler.ListMessages)
+				forums.POST("/:id/messages", forumMessageHandler.CreateMessage)
+				forums.DELETE("/:id/messages/:msg_id", forumMessageHandler.DeleteMessage)
+				// Forum chat WebSocket
+				forums.GET("/:id/ws", wsHandler.HandleWebSocket)
+
 				forumPosts := forums.Group("/:id/posts")
 				{
 					forumPosts.POST("", forumPostHandler.CreatePost)
@@ -651,6 +800,91 @@ func main() {
 				// Forum post reactions
 				forumPosts.POST("/:id/react", reactionHandler.ReactToForumPost)
 				forumPosts.DELETE("/:id/react", reactionHandler.RemoveReactionFromForumPost)
+			}
+
+			// Journey check-ins
+
+			// Direct Chat
+			chat := protected.Group("/chat")
+			{
+				// Conversations
+				conversations := chat.Group("/conversations")
+				conversations.Use(middleware.ChatRateLimitMiddleware("conversations"))
+				{
+					conversations.POST("", conversationHandler.CreateConversation)
+					conversations.GET("", conversationHandler.ListConversations)
+					conversations.GET("/:id", conversationHandler.GetConversation)
+					conversations.DELETE("/:id", conversationHandler.DeleteConversation)
+					conversations.GET("/:id/messages", conversationHandler.GetMessages)
+					conversations.PUT("/:id/read", conversationHandler.MarkAsRead)
+					conversations.POST("/:id/participants", conversationHandler.AddParticipant)
+					conversations.DELETE("/:id/participants/:userId", conversationHandler.RemoveParticipant)
+				}
+
+				// Chat Requests
+				chatRequests := chat.Group("/requests")
+				chatRequests.Use(middleware.ChatRateLimitMiddleware("conversations"))
+				{
+					chatRequests.POST("", chatRequestHandler.CreateChatRequest)
+					chatRequests.GET("/sent", chatRequestHandler.ListSentRequests)
+					chatRequests.GET("/received", chatRequestHandler.ListReceivedRequests)
+					chatRequests.PUT("/:id/accept", chatRequestHandler.AcceptRequest)
+					chatRequests.PUT("/:id/reject", chatRequestHandler.RejectRequest)
+				}
+
+				// Messages
+				messages := chat.Group("/messages")
+				messages.Use(middleware.ChatRateLimitMiddleware("messages"))
+				{
+					messages.POST("", messageHandler.CreateMessage)
+					messages.GET("/:id", messageHandler.GetMessage)
+					messages.GET("/conversation/:id", messageHandler.ListConversationMessages)
+					messages.GET("/group/:id", messageHandler.ListGroupMessages)
+					messages.PUT("/:id/status", messageHandler.UpdateMessageStatus)
+					messages.DELETE("/:id", messageHandler.DeleteMessage)
+				}
+
+				// Message Reactions
+				reactions := chat.Group("/messages/:id/reactions")
+				reactions.Use(middleware.ChatRateLimitMiddleware("messages"))
+				{
+					reactions.POST("", messageReactionHandler.CreateReaction)
+					reactions.DELETE("", messageReactionHandler.RemoveReaction)
+					reactions.GET("", messageReactionHandler.GetMessageReactions)
+				}
+			}
+
+			// WebSocket endpoint
+			v1.GET("/ws", wsHandler.HandleWebSocket)
+
+			// Group Chat
+			groups := protected.Group("/groups")
+			groups.Use(middleware.ChatRateLimitMiddleware("groups"))
+			{
+				groups.POST("", groupChatHandler.CreateGroup)
+				groups.GET("", groupChatHandler.ListUserGroups)
+				groups.GET("/:id", groupChatHandler.GetGroup)
+				groups.PUT("/:id", groupChatHandler.UpdateGroup)
+				groups.DELETE("/:id", groupChatHandler.DeleteGroup)
+				groups.PUT("/:id/avatar", groupChatHandler.UpdateAvatar)
+
+				// Group members
+				groups.GET("/:id/members", groupMemberHandler.ListMembers)
+				groups.POST("/:id/members", groupMemberHandler.AddMember)
+				groups.DELETE("/:id/members/:userId", groupMemberHandler.RemoveMember)
+				groups.PUT("/:id/members/:userId/role", groupMemberHandler.UpdateMemberRole)
+				groups.PUT("/:id/read", groupMemberHandler.UpdateLastRead)
+				groups.PUT("/:id/mute", groupMemberHandler.UpdateMutedUntil)
+				groups.GET("/:id/member-count", groupMemberHandler.GetMemberCount)
+				groups.GET("/:id/membership", groupMemberHandler.CheckMembership)
+
+				// Group invites
+				groups.GET("/:id/invites", groupInviteHandler.ListGroupInvites)
+				groups.POST("/:id/invites", groupInviteHandler.CreateInvite)
+				groups.GET("/invites", groupInviteHandler.ListUserInvites)
+				groups.POST("/invites/:inviteId/accept", groupInviteHandler.AcceptInvite)
+				groups.POST("/invites/:inviteId/reject", groupInviteHandler.RejectInvite)
+				groups.DELETE("/invites/:inviteId", groupInviteHandler.RevokeInvite)
 			}
 
 			// Journey check-ins (private - user only accesses their own)

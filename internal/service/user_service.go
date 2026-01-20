@@ -24,13 +24,20 @@ type UserService interface {
 	ListUsers(offset, limit int) ([]models.User, int64, error)
 	UpdateUserRole(userID uint, role models.UserRole) error
 	GetSystemUser() (*models.User, error)
+	// Password management
+	ForgotPassword(email string) error
+	ResetPassword(token, newPassword string) error
+	ChangePassword(userID uint, currentPassword, newPassword string) error
 }
 
 type userService struct {
-	userRepo           repository.UserRepository
-	config             *config.Config
-	cache              cache.Cache
-	loginAttemptTracker *utils.LoginAttemptTracker
+	userRepo              repository.UserRepository
+	config                *config.Config
+	cache                 cache.Cache
+	loginAttemptTracker   *utils.LoginAttemptTracker
+	passwordResetManager  *utils.PasswordResetManager
+	emailService          *utils.EmailService
+	tokenBlacklistService *utils.TokenBlacklistService
 }
 
 func NewUserService(userRepo repository.UserRepository, cfg *config.Config, cacheInstance cache.Cache) UserService {
@@ -40,6 +47,27 @@ func NewUserService(userRepo repository.UserRepository, cfg *config.Config, cach
 		config:              cfg,
 		cache:               cacheInstance,
 		loginAttemptTracker: tracker,
+	}
+}
+
+// NewUserServiceWithPasswordReset creates a new user service with password reset functionality
+func NewUserServiceWithPasswordReset(
+	userRepo repository.UserRepository,
+	cfg *config.Config,
+	cacheInstance cache.Cache,
+	emailService *utils.EmailService,
+	tokenBlacklistService *utils.TokenBlacklistService,
+) UserService {
+	tracker := utils.NewLoginAttemptTracker(cacheInstance, cfg.Security)
+	passwordResetManager := utils.NewPasswordResetManager(cacheInstance)
+	return &userService{
+		userRepo:              userRepo,
+		config:                cfg,
+		cache:                 cacheInstance,
+		loginAttemptTracker:   tracker,
+		passwordResetManager:  passwordResetManager,
+		emailService:          emailService,
+		tokenBlacklistService: tokenBlacklistService,
 	}
 }
 
@@ -276,5 +304,176 @@ func (s *userService) GetSystemUser() (*models.User, error) {
 	s.cache.Set(ctx, key, *userPtr, ttl)
 
 	return userPtr, nil
+}
+
+// ForgotPassword initiates the password reset process
+// Always returns nil to prevent email enumeration attacks
+func (s *userService) ForgotPassword(email string) error {
+	ctx := context.Background()
+
+	// Check rate limit
+	if s.passwordResetManager != nil {
+		if err := s.passwordResetManager.CheckRateLimit(ctx, email); err != nil {
+			return err
+		}
+	}
+
+	// Find user by email
+	user, err := s.userRepo.FindByEmail(email)
+	if err != nil {
+		// Don't reveal that email doesn't exist
+		// Still increment rate limit to prevent enumeration timing attacks
+		if s.passwordResetManager != nil {
+			s.passwordResetManager.IncrementRateLimit(ctx, email)
+		}
+		return nil
+	}
+
+	// Skip if OAuth-only user (no password)
+	if user.Password == nil {
+		// Don't reveal that this is an OAuth-only account
+		if s.passwordResetManager != nil {
+			s.passwordResetManager.IncrementRateLimit(ctx, email)
+		}
+		return nil
+	}
+
+	// Generate reset token
+	if s.passwordResetManager == nil {
+		return errors.New("password reset not available")
+	}
+
+	token, err := s.passwordResetManager.GenerateResetToken()
+	if err != nil {
+		return fmt.Errorf("failed to generate reset token: %w", err)
+	}
+
+	// Store token in cache with user ID
+	if err := s.passwordResetManager.StoreResetToken(ctx, token, user.ID); err != nil {
+		return fmt.Errorf("failed to store reset token: %w", err)
+	}
+
+	// Increment rate limit
+	if err := s.passwordResetManager.IncrementRateLimit(ctx, email); err != nil {
+		// Log but don't fail
+		fmt.Printf("failed to increment rate limit: %v\n", err)
+	}
+
+	// Send password reset email
+	if s.emailService != nil {
+		if err := s.emailService.SendPasswordResetEmail(user.Email, user.Username, token); err != nil {
+			// Log but don't fail - user shouldn't know if email failed
+			fmt.Printf("failed to send password reset email: %v\n", err)
+		}
+	}
+
+	return nil
+}
+
+// ResetPassword resets the user's password using a valid reset token
+func (s *userService) ResetPassword(token, newPassword string) error {
+	ctx := context.Background()
+
+	if s.passwordResetManager == nil {
+		return errors.New("password reset not available")
+	}
+
+	// Validate token and get user ID
+	userID, err := s.passwordResetManager.ValidateResetToken(ctx, token)
+	if err != nil {
+		return err
+	}
+
+	// Validate password strength
+	if err := utils.ValidatePasswordStrength(newPassword); err != nil {
+		return err
+	}
+
+	// Check for common passwords
+	if utils.IsCommonPassword(newPassword) {
+		return errors.New("password is too common, please choose a stronger password")
+	}
+
+	// Get user
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return fmt.Errorf("user not found: %w", err)
+	}
+
+	// Hash new password
+	hashedPassword, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Update password
+	user.Password = &hashedPassword
+	if err := s.userRepo.Update(user); err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	// Invalidate the token (single-use)
+	if err := s.passwordResetManager.InvalidateResetToken(ctx, token); err != nil {
+		// Log but don't fail
+		fmt.Printf("failed to invalidate reset token: %v\n", err)
+	}
+
+	// Invalidate all user sessions
+	if s.tokenBlacklistService != nil {
+		if err := s.tokenBlacklistService.InvalidateUserTokens(ctx, userID); err != nil {
+			// Log but don't fail
+			fmt.Printf("failed to invalidate user tokens: %v\n", err)
+		}
+	}
+
+	return nil
+}
+
+// ChangePassword changes the user's password (requires current password)
+func (s *userService) ChangePassword(userID uint, currentPassword, newPassword string) error {
+	// Get user
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return fmt.Errorf("user not found: %w", err)
+	}
+
+	// Check if user has a password (not OAuth-only)
+	if user.Password == nil {
+		return errors.New("cannot change password for OAuth-only account")
+	}
+
+	// Verify current password
+	if !utils.CheckPasswordHash(currentPassword, *user.Password) {
+		return errors.New("current password is incorrect")
+	}
+
+	// Validate new password strength
+	if err := utils.ValidatePasswordStrength(newPassword); err != nil {
+		return err
+	}
+
+	// Check for common passwords
+	if utils.IsCommonPassword(newPassword) {
+		return errors.New("password is too common, please choose a stronger password")
+	}
+
+	// Ensure new password is different
+	if utils.CheckPasswordHash(newPassword, *user.Password) {
+		return errors.New("new password must be different from current password")
+	}
+
+	// Hash new password
+	hashedPassword, err := utils.HashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Update password
+	user.Password = &hashedPassword
+	if err := s.userRepo.Update(user); err != nil {
+		return fmt.Errorf("failed to update password: %w", err)
+	}
+
+	return nil
 }
 

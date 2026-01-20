@@ -14,6 +14,8 @@ type UserFollowService interface {
 	GetFollowStats(userID uint) (followers int64, following int64, err error)
 	IsFollowing(followerID, followingID uint) (bool, error)
 	GetFollowedUserIDs(followerID uint) ([]uint, error)
+	GetFriends(userID uint, offset, limit int) ([]models.User, int64, error)
+	IsMutualFollow(userA, userB uint) (bool, error)
 }
 
 type userFollowService struct {
@@ -88,5 +90,13 @@ func (s *userFollowService) IsFollowing(followerID, followingID uint) (bool, err
 
 func (s *userFollowService) GetFollowedUserIDs(followerID uint) ([]uint, error) {
 	return s.userFollowRepo.GetFollowedUserIDs(followerID)
+}
+
+func (s *userFollowService) GetFriends(userID uint, offset, limit int) ([]models.User, int64, error) {
+	return s.userFollowRepo.GetFriends(userID, offset, limit)
+}
+
+func (s *userFollowService) IsMutualFollow(userA, userB uint) (bool, error) {
+	return s.userFollowRepo.IsMutualFollow(userA, userB)
 }
 

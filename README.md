@@ -37,6 +37,14 @@ A RESTful API application built with Go (Gin framework) to manage TransJakarta B
   - Status tracking (pending → reviewed → resolved)
   - Admin notes and resolution tracking
 
+- **Real-Time Chat**:
+  - Direct messaging with follow-relationship validation
+  - Group chat with roles and permissions
+  - Forum chat with 24-hour auto-clear
+  - Message reactions and threaded replies
+  - Typing indicators and read receipts
+  - Online presence tracking
+
 ## Technology Stack
 
 - **Framework**: Gin
@@ -216,6 +224,84 @@ All write operations (POST, PUT, DELETE) require authentication, and admin opera
 - `GET /api/v1/users` - List users
 - `GET /api/v1/users/:id` - Get user details
 - `PUT /api/v1/users/:id/role` - Update user role
+
+### Chat System
+
+**All chat endpoints require authentication.**
+
+#### Direct Chat
+- `POST /api/v1/chat/requests` - Create a chat request
+- `GET /api/v1/chat/requests/sent` - List sent chat requests
+- `GET /api/v1/chat/requests/received` - List received chat requests
+- `POST /api/v1/chat/requests/:id/accept` - Accept chat request
+- `POST /api/v1/chat/requests/:id/reject` - Reject chat request
+
+#### Conversations
+- `POST /api/v1/chat/conversations` - Create conversation
+- `GET /api/v1/chat/conversations` - List user conversations
+- `GET /api/v1/chat/conversations/:id` - Get conversation details
+- `GET /api/v1/chat/conversations/:id/messages` - Get conversation messages
+- `PUT /api/v1/chat/conversations/:id/read` - Mark conversation as read
+- `DELETE /api/v1/chat/conversations/:id` - Delete conversation
+
+#### Group Chat
+- `POST /api/v1/chat/groups` - Create group
+- `GET /api/v1/chat/groups` - List user's groups
+- `GET /api/v1/chat/groups/:id` - Get group details
+- `PUT /api/v1/chat/groups/:id` - Update group
+- `DELETE /api/v1/chat/groups/:id` - Delete group
+- `PUT /api/v1/chat/groups/:id/avatar` - Update group avatar
+
+#### Group Members
+- `POST /api/v1/chat/groups/:id/members` - Add member
+- `GET /api/v1/chat/groups/:id/members` - List group members
+- `PUT /api/v1/chat/groups/:id/members/:userId/role` - Update member role
+- `DELETE /api/v1/chat/groups/:id/members/:userId` - Remove member
+
+#### Group Invites
+- `POST /api/v1/chat/groups/:id/invites` - Create invite
+- `GET /api/v1/chat/groups/:id/invites` - List group invites
+- `POST /api/v1/chat/invites/:id/accept` - Accept invite
+- `POST /api/v1/chat/invites/:id/reject` - Reject invite
+
+#### Messages
+- `POST /api/v1/chat/messages` - Send message
+- `GET /api/v1/chat/messages/:id` - Get message details
+- `GET /api/v1/chat/messages/conversation/:id` - List conversation messages
+- `GET /api/v1/chat/messages/group/:id` - List group messages
+- `PUT /api/v1/chat/messages/:id/status` - Update message status
+- `DELETE /api/v1/chat/messages/:id` - Delete message
+
+#### Message Reactions
+- `POST /api/v1/chat/messages/:id/reactions` - Add reaction
+- `GET /api/v1/chat/messages/:id/reactions` - Get message reactions
+- `DELETE /api/v1/chat/messages/:id/reactions` - Remove reaction
+
+#### Forum Chat
+- `GET /api/v1/forums/:id/messages` - List forum messages (24-hour auto-clear)
+- `POST /api/v1/forums/:id/messages` - Send forum message
+- `DELETE /api/v1/forums/:id/messages/:msg_id` - Delete forum message
+
+#### WebSocket Connection
+- `WS /api/v1/ws` - WebSocket endpoint for real-time chat
+  - Query params: `?token=<JWT_TOKEN>`
+
+**Example WebSocket connection:**
+```bash
+# Using wscat
+wscat -c "ws://localhost:8080/api/v1/ws?token=YOUR_JWT_TOKEN"
+
+# Using JavaScript
+const ws = new WebSocket('ws://localhost:8080/api/v1/ws?token=' + YOUR_JWT_TOKEN);
+```
+
+**WebSocket message types:**
+- `send_message` - Send a message
+- `mark_read` - Mark messages as read
+- `typing` - Send typing indicator
+- `ping` / `pong` - Keepalive
+
+See [CHAT_FEATURES.md](CHAT_FEATURES.md) for detailed user documentation and [CHAT_DEVELOPER_GUIDE.md](CHAT_DEVELOPER_GUIDE.md) for technical details.
 
 ## Testing
 

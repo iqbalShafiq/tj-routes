@@ -63,6 +63,16 @@ tags:
     description: User personalized data - favorites, places, recent views, and analytics
   - name: Health
     description: Health check endpoint
+  - name: DirectChat
+    description: Direct messaging functionality
+  - name: GroupChat
+    description: Group chat functionality
+  - name: ForumChat
+    description: Forum chat functionality
+  - name: MessageReactions
+    description: Message reactions functionality
+  - name: WebSocket
+    description: WebSocket connection for real-time chat
 
 paths:
   /health:
@@ -176,6 +186,135 @@ paths:
                 $ref: "#/components/schemas/LoginResponse"
         "400":
           $ref: "#/components/responses/BadRequest"
+
+  /api/v1/auth/forgot-password:
+    post:
+      tags:
+        - Authentication
+      summary: Request password reset
+      description: |
+        Request a password reset email. For security, this endpoint always returns success
+        regardless of whether the email exists to prevent email enumeration attacks.
+        If the email exists and has a password (not OAuth-only), a password reset email will be sent.
+        Rate limited to 3 requests per hour per email address.
+      operationId: forgotPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        "200":
+          description: Password reset email sent (if account exists)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                success: true
+                message: "If an account exists with this email, you will receive a password reset link shortly."
+        "400":
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              example:
+                success: false
+                error: "too many password reset requests, please try again later"
+
+  /api/v1/auth/reset-password:
+    post:
+      tags:
+        - Authentication
+      summary: Reset password with token
+      description: |
+        Reset the user's password using a valid password reset token.
+        The token is single-use and expires after 1 hour.
+        After successful password reset, all user sessions are invalidated.
+      operationId: resetPassword
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResetPasswordRequest"
+      responses:
+        "200":
+          description: Password reset successful
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                success: true
+                message: "Password has been reset successfully. Please log in with your new password."
+        "400":
+          description: Invalid/expired token or weak password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                invalid_token:
+                  value:
+                    success: false
+                    error: "invalid or expired password reset token"
+                weak_password:
+                  value:
+                    success: false
+                    error: "password must be at least 8 characters long; password must contain at least 1 uppercase letter"
+
+  /api/v1/auth/change-password:
+    post:
+      tags:
+        - Authentication
+      summary: Change password (authenticated)
+      description: |
+        Change the authenticated user's password.
+        Requires the current password for verification.
+        Cannot be used for OAuth-only accounts.
+      operationId: changePassword
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordRequest"
+      responses:
+        "200":
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+              example:
+                success: true
+                message: "Password changed successfully."
+        "400":
+          description: Invalid current password, weak new password, or same password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                wrong_password:
+                  value:
+                    success: false
+                    error: "current password is incorrect"
+                same_password:
+                  value:
+                    success: false
+                    error: "new password must be different from current password"
+                oauth_account:
+                  value:
+                    success: false
+                    error: "cannot change password for OAuth-only account"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /api/v1/stops:
     get:
@@ -1683,6 +1822,44 @@ paths:
         "401":
           $ref: "#/components/responses/Unauthorized"
 
+  /api/v1/users/{id}/friends:
+    get:
+      tags:
+        - UserFollows
+      summary: Get user's friends (mutual follows)
+      description: Get paginated list of users who have a mutual follow relationship with the specified user (both users follow each other)
+      operationId: getUserFriends
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: ID of the user to get friends for
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of friends (mutual follows)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserFriendsListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/users/{id}/role:
     put:
       tags:
@@ -3166,8 +3343,1229 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserAnalyticsResponse"
+         "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/ws:
+    get:
+      tags:
+        - WebSocket
+      summary: WebSocket connection
+      description: Connect to WebSocket for real-time chat. Provide JWT token as query parameter.
+      operationId: webSocketConnection
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: JWT authentication token
+      responses:
+        "101":
+          description: WebSocket connection accepted
+        "401":
+          description: Unauthorized - invalid or expired token
+
+  /api/v1/chat/requests:
+    post:
+      tags:
+        - DirectChat
+      summary: Create chat request
+      description: Send a chat request to another user (requires follow relationship)
+      operationId: createChatRequest
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChatRequestRequest"
+      responses:
+        "201":
+          description: Chat request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatRequestResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/chat/requests/sent:
+    get:
+      tags:
+        - DirectChat
+      summary: List sent chat requests
+      description: Get paginated list of chat requests sent by current user
+      operationId: listSentChatRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of sent requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatRequestListResponse"
+
+  /api/v1/chat/requests/received:
+    get:
+      tags:
+        - DirectChat
+      summary: List received chat requests
+      description: Get paginated list of chat requests received by current user
+      operationId: listReceivedChatRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of received requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatRequestListResponse"
+
+  /api/v1/chat/requests/{id}/accept:
+    post:
+      tags:
+        - DirectChat
+      summary: Accept chat request
+      description: Accept a pending chat request
+      operationId: acceptChatRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Chat request accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/chat/requests/{id}/reject:
+    post:
+      tags:
+        - DirectChat
+      summary: Reject chat request
+      description: Reject a pending chat request
+      operationId: rejectChatRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Chat request rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /api/v1/chat/conversations:
+    post:
+      tags:
+        - DirectChat
+      summary: Create conversation
+      description: Create or get existing conversation with another user
+      operationId: createConversation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationRequest"
+      responses:
+        "201":
+          description: Conversation created or returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationResponse"
+    get:
+      tags:
+        - DirectChat
+      summary: List conversations
+      description: Get paginated list of user's conversations
+      operationId: listConversations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationListResponse"
+
+  /api/v1/chat/conversations/{id}:
+    get:
+      tags:
+        - DirectChat
+      summary: Get conversation details
+      description: Get detailed information about a conversation
+      operationId: getConversation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationDetailResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags:
+        - DirectChat
+      summary: Delete conversation
+      description: Delete a conversation (removes from current user's view)
+      operationId: deleteConversation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /api/v1/chat/conversations/{id}/messages:
+    get:
+      tags:
+        - DirectChat
+      summary: Get conversation messages
+      description: Get paginated messages from a conversation
+      operationId: getConversationMessages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageListResponse"
+
+  /api/v1/chat/conversations/{id}/read:
+    put:
+      tags:
+        - DirectChat
+      summary: Mark conversation as read
+      description: Mark all messages in conversation as read
+      operationId: markConversationAsRead
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation marked as read
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /api/v1/chat/conversations/{id}/participants:
+    post:
+      tags:
+        - DirectChat
+      summary: Add conversation participant
+      description: Add a user to a conversation
+      operationId: addConversationParticipant
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddParticipantRequest"
+      responses:
+        "200":
+          description: Participant added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/chat/conversations/{id}/participants/{userId}:
+    delete:
+      tags:
+        - DirectChat
+      summary: Remove conversation participant
+      description: Remove a user from a conversation
+      operationId: removeConversationParticipant
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Participant removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /api/v1/chat/groups:
+    post:
+      tags:
+        - GroupChat
+      summary: Create group
+      description: Create a new group chat
+      operationId: createGroup
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupRequest"
+      responses:
+        "201":
+          description: Group created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupChatResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    get:
+      tags:
+        - GroupChat
+      summary: List user's groups
+      description: Get paginated list of groups user is a member of
+      operationId: listUserGroups
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: List of groups
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupListResponse"
+
+  /api/v1/chat/groups/{id}:
+    get:
+      tags:
+        - GroupChat
+      summary: Get group details
+      description: Get detailed information about a group
+      operationId: getGroup
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Group details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupDetailResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags:
+        - GroupChat
+      summary: Update group
+      description: Update group information
+      operationId: updateGroup
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGroupRequest"
+      responses:
+        "200":
+          description: Group updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    delete:
+      tags:
+        - GroupChat
+      summary: Delete group
+      description: Delete a group
+      operationId: deleteGroup
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Group deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /api/v1/chat/groups/{id}/avatar:
+    put:
+      tags:
+        - GroupChat
+      summary: Update group avatar
+      description: Update group avatar image
+      operationId: updateGroupAvatar
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGroupAvatarRequest"
+      responses:
+        "200":
+          description: Avatar updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/chat/groups/{id}/members:
+    get:
+      tags:
+        - GroupChat
+      summary: List group members
+      description: Get paginated list of group members
+      operationId: listGroupMembers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of members
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupMemberListResponse"
+
+  /api/v1/chat/groups/{id}/members/{userId}/role:
+    put:
+      tags:
+        - GroupChat
+      summary: Update member role
+      description: Update member role in group
+      operationId: updateMemberRole
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemberRoleRequest"
+      responses:
+        "200":
+          description: Member role updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/chat/groups/{id}/members/{userId}:
+    delete:
+      tags:
+        - GroupChat
+      summary: Remove member from group
+      description: Remove a member from group
+      operationId: removeGroupMember
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Member removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/chat/groups/{id}/invites:
+    get:
+      tags:
+        - GroupChat
+      summary: List group invites
+      description: Get paginated list of group invites
+      operationId: listGroupInvites
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of invites
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupInviteListResponse"
+    post:
+      tags:
+        - GroupChat
+      summary: Create group invite
+      description: Invite a user to join a group
+      operationId: createGroupInvite
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupInviteRequest"
+      responses:
+        "201":
+          description: Invite created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GroupInviteResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/chat/invites/{id}/accept:
+    post:
+      tags:
+        - GroupChat
+      summary: Accept group invite
+      description: Accept a pending group invite
+      operationId: acceptGroupInvite
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invite accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/chat/invites/{id}/reject:
+    post:
+      tags:
+        - GroupChat
+      summary: Reject group invite
+      description: Reject a pending group invite
+      operationId: rejectGroupInvite
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Invite rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /api/v1/chat/messages:
+    post:
+      tags:
+        - DirectChat
+      summary: Send message
+      description: Send a message to a conversation or group
+      operationId: sendMessage
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMessageRequest"
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/chat/messages/{id}:
+    get:
+      tags:
+        - DirectChat
+      summary: Get message
+      description: Get detailed information about a message
+      operationId: getMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Message details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageDetailResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      tags:
+        - DirectChat
+      summary: Update message
+      description: Update message content
+      operationId: updateMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMessageRequest"
+      responses:
+        "200":
+          description: Message updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    delete:
+      tags:
+        - DirectChat
+      summary: Delete message
+      description: Delete a message
+      operationId: deleteMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Message deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /api/v1/chat/messages/{id}/status:
+    put:
+      tags:
+        - DirectChat
+      summary: Update message status
+      description: Update message status (sent/delivered/read)
+      operationId: updateMessageStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMessageStatusRequest"
+      responses:
+        "200":
+          description: Message status updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/chat/messages/conversation/{id}:
+    get:
+      tags:
+        - DirectChat
+      summary: List conversation messages
+      description: Get paginated messages from a conversation
+      operationId: listConversationMessages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageListResponse"
+
+  /api/v1/chat/messages/group/{id}:
+    get:
+      tags:
+        - GroupChat
+      summary: List group messages
+      description: Get paginated messages from a group
+      operationId: listGroupMessages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageListResponse"
+
+  /api/v1/chat/messages/{id}/reactions:
+    get:
+      tags:
+        - MessageReactions
+      summary: Get message reactions
+      description: Get all reactions on a message
+      operationId: getMessageReactions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of reactions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageReactionListResponse"
+    post:
+      tags:
+        - MessageReactions
+      summary: Add message reaction
+      description: Add or toggle a reaction on a message
+      operationId: addMessageReaction
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddMessageReactionRequest"
+      responses:
+        "200":
+          description: Reaction added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageReactionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+    delete:
+      tags:
+        - MessageReactions
+      summary: Remove message reaction
+      description: Remove your reaction from a message
+      operationId: removeMessageReaction
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Reaction removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /api/v1/forums/{id}/messages:
+    get:
+      tags:
+        - ForumChat
+      summary: Get forum messages
+      description: Get paginated forum chat messages (24-hour auto-clear)
+      operationId: listForumMessages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: List of forum messages
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumMessageListResponse"
+    post:
+      tags:
+        - ForumChat
+      summary: Send forum message
+      description: Send a message to forum chat
+      operationId: sendForumMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateForumMessageRequest"
+      responses:
+        "201":
+          description: Forum message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ForumMessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/forums/{id}/messages/{msg_id}:
+    delete:
+      tags:
+        - ForumChat
+      summary: Delete forum message
+      description: Delete a forum message
+      operationId: deleteForumMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: msg_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Forum message deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/ws:
+    get:
+      tags:
+        - WebSocket
+      summary: WebSocket connection
+      description: Connect to WebSocket for real-time chat. Provide JWT token as query parameter.
+      operationId: webSocketConnection
+      parameters:
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: JWT authentication token
+      responses:
+        "101":
+          description: WebSocket connection accepted
+        "401":
+          description: Unauthorized - invalid or expired token
+
+  /api/v1/chat/requests:
+    post:
+      tags:
+        - DirectChat
+      summary: Create chat request
+      description: Send a chat request to another user (requires follow relationship)
+      operationId: createChatRequest
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateChatRequestRequest"
+      responses:
+        "201":
+          description: Chat request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatRequestResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/chat/requests/sent:
+    get:
+      tags:
+        - DirectChat
+      summary: List sent chat requests
+      description: Get paginated list of chat requests sent by current user
+      operationId: listSentChatRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of sent requests
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ChatRequestListResponse"
+
+  /api/v1/chat/conversations:
+    post:
+      tags:
+        - DirectChat
+      summary: Create conversation
+      description: Create or get existing conversation with another user
+      operationId: createConversation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationRequest"
+      responses:
+        "201":
+          description: Conversation created or returned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConversationResponse"
+
+  /api/v1/chat/messages:
+    post:
+      tags:
+        - DirectChat
+      summary: Send message
+      description: Send a message to a conversation or group
+      operationId: sendMessage
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMessageRequest"
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
 
 components:
   securitySchemes:
@@ -3214,6 +4612,65 @@ components:
           type: string
           format: password
           example: password123
+
+    ForgotPasswordRequest:
+      type: object
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          example: user@example.com
+          description: Email address associated with the account
+
+    ResetPasswordRequest:
+      type: object
+      required:
+        - token
+        - new_password
+      properties:
+        token:
+          type: string
+          example: "abc123def456..."
+          description: Password reset token received via email (64 character hex string)
+        new_password:
+          type: string
+          format: password
+          minLength: 8
+          example: "NewSecure@Pass123"
+          description: |
+            New password. Must meet security requirements:
+            - At least 8 characters
+            - At least 1 uppercase letter
+            - At least 1 lowercase letter
+            - At least 1 digit
+            - At least 1 special character
+
+    ChangePasswordRequest:
+      type: object
+      required:
+        - current_password
+        - new_password
+      properties:
+        current_password:
+          type: string
+          format: password
+          example: "OldPass@123"
+          description: Current password for verification
+        new_password:
+          type: string
+          format: password
+          minLength: 8
+          example: "NewSecure@Pass456"
+          description: |
+            New password. Must meet security requirements:
+            - At least 8 characters
+            - At least 1 uppercase letter
+            - At least 1 lowercase letter
+            - At least 1 digit
+            - At least 1 special character
+            - Must be different from current password
 
     LoginResponse:
       type: object
@@ -4487,6 +5944,30 @@ components:
               type: boolean
               example: true
 
+    UserFriendsListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            friends:
+              type: array
+              items:
+                $ref: "#/components/schemas/User"
+              description: List of friends (mutual follows)
+            total:
+              type: integer
+              example: 10
+            page:
+              type: integer
+              example: 1
+            limit:
+              type: integer
+              example: 20
+
     ForumResponse:
       type: object
       properties:
@@ -5273,3 +6754,1257 @@ components:
           example:
             success: false
             error: "Resource not found"
+
+  /api/v1/ws:
+    get:
+      tags:
+        - WebSocket
+      summary: WebSocket endpoint for real-time chat
+      description: Connect to WebSocket for real-time messaging. Pass JWT token as query parameter: /api/v1/ws?token=<your-token>
+      operationId: connectWebSocket
+      responses:
+        "101":
+          description: WebSocket connection established
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    example: connection_established
+
+  /api/v1/chat/conversations:
+    get:
+      tags:
+        - DirectChat
+      summary: List conversations
+      description: Get paginated list of user's conversations
+      operationId: listConversations
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Conversation"
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+    post:
+      tags:
+        - DirectChat
+      summary: Create conversation
+      description: Create a new direct chat conversation (requires both users to follow each other)
+      operationId: createConversation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateConversationRequest"
+      responses:
+        "201":
+          description: Conversation created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/Conversation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/chat/conversations/{id}:
+    get:
+      tags:
+        - DirectChat
+      summary: Get conversation
+      description: Get conversation details by ID
+      operationId: getConversation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Conversation details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/ConversationDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags:
+        - DirectChat
+      summary: Delete conversation
+      description: Delete a conversation (soft delete)
+      operationId: deleteConversation
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/MessageResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/chat/conversations/{id}/messages:
+    get:
+      tags:
+        - DirectChat
+      summary: Get conversation messages
+      description: Get paginated messages for a conversation
+      operationId: getConversationMessages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Message"
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+
+  /api/v1/chat/conversations/{id}/read:
+    put:
+      tags:
+        - DirectChat
+      summary: Mark conversation as read
+      description: Mark all messages in conversation as read for current user
+      operationId: markConversationAsRead
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/MessageResponse"
+
+  /api/v1/chat/requests:
+    get:
+      tags:
+        - DirectChat
+      summary: List received chat requests
+      description: Get paginated list of received chat requests
+      operationId: listReceivedChatRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: List of chat requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ChatRequest"
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+
+  /api/v1/chat/requests/sent:
+    get:
+      tags:
+        - DirectChat
+      summary: List sent chat requests
+      description: Get paginated list of sent chat requests
+      operationId: listSentChatRequests
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: List of sent chat requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ChatRequest"
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+
+  /api/v1/chat/requests/{id}/accept:
+    put:
+      tags:
+        - DirectChat
+      summary: Accept chat request
+      description: Accept a chat request and create conversation
+      operationId: acceptChatRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/MessageResponse"
+
+  /api/v1/chat/requests/{id}/reject:
+    put:
+      tags:
+        - DirectChat
+      summary: Reject chat request
+      description: Reject a chat request
+      operationId: rejectChatRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/MessageResponse"
+
+  /api/v1/groups:
+    get:
+      tags:
+        - GroupChat
+      summary: List user groups
+      description: Get paginated list of user's groups
+      operationId: listUserGroups
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: List of groups
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/GroupChat"
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+    post:
+      tags:
+        - GroupChat
+      summary: Create group
+      description: Create a new group chat
+      operationId: createGroup
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateGroupRequest"
+      responses:
+        "201":
+          description: Group created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/GroupChat"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/groups/{id}:
+    get:
+      tags:
+        - GroupChat
+      summary: Get group
+      description: Get group details
+      operationId: getGroup
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Group details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/GroupChatDetail"
+    put:
+      tags:
+        - GroupChat
+      summary: Update group
+      description: Update group details (admin/moderator only)
+      operationId: updateGroup
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateGroupRequest"
+      responses:
+        "200":
+          description: Group updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/GroupChat"
+    delete:
+      tags:
+        - GroupChat
+      summary: Delete group
+      description: Delete a group (admin only)
+      operationId: deleteGroup
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/MessageResponse"
+
+  /api/v1/groups/{id}/members:
+    get:
+      tags:
+        - GroupChat
+      summary: List group members
+      description: Get paginated list of group members
+      operationId: listGroupMembers
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        "200":
+          description: List of members
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/GroupMember"
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+    post:
+      tags:
+        - GroupChat
+      summary: Add group member
+      description: Add a user to group (admin only)
+      operationId: addGroupMember
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/MessageResponse"
+
+  /api/v1/groups/{id}/members/{userId}:
+    delete:
+      tags:
+        - GroupChat
+      summary: Remove group member
+      description: Remove a member from group (admin only)
+      operationId: removeGroupMember
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/MessageResponse"
+
+  /api/v1/groups/{id}/invites:
+    get:
+      tags:
+        - GroupChat
+      summary: List group invites
+      description: Get pending invites for a group
+      operationId: listGroupInvites
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: List of invites
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/GroupInvite"
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+    post:
+      tags:
+        - GroupChat
+      summary: Create group invite
+      description: Invite a user to join a group (admin only)
+      operationId: createGroupInvite
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                invitee_id:
+                  type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/MessageResponse"
+
+  /api/v1/groups/invites:
+    get:
+      tags:
+        - GroupChat
+      summary: List user invites
+      description: Get pending invites for current user
+      operationId: listUserGroupInvites
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: List of invites
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/GroupInvite"
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+
+  /api/v1/groups/invites/{inviteId}/accept:
+    post:
+      tags:
+        - GroupChat
+      summary: Accept group invite
+      description: Accept a group invite
+      operationId: acceptGroupInvite
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/MessageResponse"
+
+  /api/v1/groups/invites/{inviteId}/reject:
+    post:
+      tags:
+        - GroupChat
+      summary: Reject group invite
+      description: Reject a group invite
+      operationId: rejectGroupInvite
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: inviteId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/MessageResponse"
+
+  /api/v1/forums/{id}/messages:
+    get:
+      tags:
+        - ForumChat
+      summary: Get forum messages
+      description: Get paginated forum chat messages (members only)
+      operationId: getForumMessages
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+          default: 20
+      responses:
+        "200":
+          description: List of forum messages
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/ForumMessage"
+                      total:
+                        type: integer
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+    post:
+      tags:
+        - ForumChat
+      summary: Send forum message
+      description: Send a message to forum chat (members only)
+      operationId: sendForumMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/ForumMessage"
+
+  /api/v1/forums/{id}/messages/{msg_id}:
+    delete:
+      tags:
+        - ForumChat
+      summary: Delete forum message
+      description: Delete a forum message (owner only)
+      operationId: deleteForumMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: msg_id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/MessageResponse"
+
+  /api/v1/chat/messages:
+    get:
+      tags:
+        - DirectChat
+      summary: Get message
+      description: Get message by ID
+      operationId: getMessage
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Message details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/MessageDetail"
+    post:
+      tags:
+        - DirectChat
+      summary: Send message
+      description: Send a message to conversation or group
+      operationId: sendMessage
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendMessageRequest"
+      responses:
+        "201":
+          description: Message sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    $ref: "#/components/schemas/Message"
+
+  /api/v1/chat/messages/{id}/reactions:
+    get:
+      tags:
+        - MessageReactions
+      summary: Get message reactions
+      description: Get all reactions for a message
+      operationId: getMessageReactions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of reactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/MessageReaction"
+    post:
+      tags:
+        - MessageReactions
+      summary: Add reaction to message
+      description: Add or toggle emoji reaction on a message
+      operationId: addMessageReaction
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                emoji:
+                  type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/MessageResponse"
+    delete:
+      tags:
+        - MessageReactions
+      summary: Remove reaction from message
+      description: Remove your reaction from a message
+      operationId: removeMessageReaction
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          $ref: "#/components/responses/MessageResponse"
+
+components:
+  schemas:
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: ["direct"]
+          example: direct
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserBasic"
+
+    ConversationDetail:
+      allOf:
+        - $ref: "#/components/schemas/Conversation"
+        - type: object
+          properties:
+            messages:
+              type: array
+              items:
+                $ref: "#/components/schemas/Message"
+
+    CreateConversationRequest:
+      type: object
+      required:
+        - user_id
+      properties:
+        user_id:
+          type: integer
+          description: User ID to start conversation with
+
+    ChatRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        sender_id:
+          type: integer
+        sender:
+          $ref: "#/components/schemas/UserBasic"
+        receiver_id:
+          type: integer
+        receiver:
+          $ref: "#/components/schemas/UserBasic"
+        message:
+          type: string
+          description: Initial message content
+        status:
+          type: string
+          enum: ["pending", "accepted", "rejected"]
+        created_at:
+          type: string
+          format: date-time
+
+    GroupChat:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        avatar_url:
+          type: string
+          format: uri
+        type:
+          type: string
+          enum: ["public", "private", "restricted"]
+        max_members:
+          type: integer
+        created_by_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    GroupChatDetail:
+      allOf:
+        - $ref: "#/components/schemas/GroupChat"
+        - type: object
+          properties:
+            members:
+              type: array
+              items:
+                $ref: "#/components/schemas/GroupMember"
+
+    CreateGroupRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Group name
+        description:
+          type: string
+        avatar_url:
+          type: string
+          format: uri
+        type:
+          type: string
+          enum: ["public", "private", "restricted"]
+          default: private
+
+    UpdateGroupRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        description:
+          type: string
+        avatar_url:
+          type: string
+          format: uri
+        type:
+          type: string
+          enum: ["public", "private", "restricted"]
+
+    GroupMember:
+      type: object
+      properties:
+        id:
+          type: integer
+        group_id:
+          type: integer
+        user_id:
+          type: integer
+        user:
+          $ref: "#/components/schemas/UserBasic"
+        role:
+          type: string
+          enum: ["admin", "moderator", "member"]
+        last_read_at:
+          type: string
+          format: date-time
+        muted_until:
+          type: string
+          format: date-time
+        joined_at:
+          type: string
+          format: date-time
+
+    GroupInvite:
+      type: object
+      properties:
+        id:
+          type: integer
+        group_id:
+          type: integer
+        inviter_id:
+          type: integer
+        inviter:
+          $ref: "#/components/schemas/UserBasic"
+        invitee_id:
+          type: integer
+        invitee:
+          $ref: "#/components/schemas/UserBasic"
+        status:
+          type: string
+          enum: ["pending", "accepted", "rejected", "expired"]
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    Message:
+      type: object
+      properties:
+        id:
+          type: integer
+        conversation_id:
+          type: integer
+          nullable: true
+        group_id:
+          type: integer
+          nullable: true
+        sender_id:
+          type: integer
+        sender:
+          $ref: "#/components/schemas/UserBasic"
+        content:
+          type: string
+        message_type:
+          type: string
+          enum: ["text", "image", "file", "system"]
+        reply_to_id:
+          type: integer
+          nullable: true
+        status:
+          type: string
+          enum: ["sent", "delivered", "read"]
+        created_at:
+          type: string
+          format: date-time
+
+    MessageDetail:
+      allOf:
+        - $ref: "#/components/schemas/Message"
+        - type: object
+          properties:
+            reactions:
+              type: array
+              items:
+                $ref: "#/components/schemas/MessageReaction"
+            reply_to:
+              $ref: "#/components/schemas/Message"
+
+    SendMessageRequest:
+      type: object
+      required:
+        - content
+      properties:
+        conversation_id:
+          type: integer
+          nullable: true
+        group_id:
+          type: integer
+          nullable: true
+        content:
+          type: string
+          maxLength: 10000
+          minLength: 1
+        reply_to_id:
+          type: integer
+          nullable: true
+
+    ForumMessage:
+      type: object
+      properties:
+        id:
+          type: integer
+        forum_id:
+          type: integer
+        user_id:
+          type: integer
+        user:
+          $ref: "#/components/schemas/UserBasic"
+        content:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    MessageReaction:
+      type: object
+      properties:
+        id:
+          type: integer
+        message_id:
+          type: integer
+        user_id:
+          type: integer
+        emoji:
+          type: string
+        created_at:
+          type: string
+          format: date-time

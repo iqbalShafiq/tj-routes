@@ -29,13 +29,13 @@ type IPRateLimiter struct {
 // NewIPRateLimiter creates a new IP rate limiter with TTL-based cleanup
 func NewIPRateLimiter(rps int, burst int) *IPRateLimiter {
 	return &IPRateLimiter{
-		ips:        make(map[string]*IPEntry),
-		mu:         &sync.RWMutex{},
-		r:          rate.Limit(rps),
-		b:          burst,
-		entryTTL:   15 * time.Minute, // Entries expire after 15 minutes of inactivity
-		maxEntries: 10000,            // Maximum number of entries before forced cleanup
-		cleanupTick: 5 * time.Minute, // Cleanup every 5 minutes
+		ips:         make(map[string]*IPEntry),
+		mu:          &sync.RWMutex{},
+		r:           rate.Limit(rps),
+		b:           burst,
+		entryTTL:    15 * time.Minute,
+		maxEntries:  10000,
+		cleanupTick: 5 * time.Minute,
 	}
 }
 
@@ -66,23 +66,19 @@ func (i *IPRateLimiter) Cleanup() {
 	now := time.Now()
 	expired := make([]string, 0)
 
-	// Find expired entries
 	for ip, entry := range i.ips {
 		if now.Sub(entry.lastAccess) > i.entryTTL {
 			expired = append(expired, ip)
 		}
 	}
 
-	// Remove expired entries
 	for _, ip := range expired {
 		delete(i.ips, ip)
 	}
 
-	// If still over max entries, remove oldest entries
 	if len(i.ips) > i.maxEntries {
-		// Find oldest entries
 		type ipTime struct {
-			ip        string
+			ip         string
 			lastAccess time.Time
 		}
 		entries := make([]ipTime, 0, len(i.ips))
@@ -90,7 +86,6 @@ func (i *IPRateLimiter) Cleanup() {
 			entries = append(entries, ipTime{ip, entry.lastAccess})
 		}
 
-		// Sort by last access time (oldest first)
 		for j := 0; j < len(entries)-i.maxEntries; j++ {
 			for k := j + 1; k < len(entries); k++ {
 				if entries[j].lastAccess.After(entries[k].lastAccess) {
@@ -99,7 +94,6 @@ func (i *IPRateLimiter) Cleanup() {
 			}
 		}
 
-		// Remove oldest entries
 		toRemove := len(entries) - i.maxEntries
 		for j := 0; j < toRemove; j++ {
 			delete(i.ips, entries[j].ip)
@@ -125,21 +119,92 @@ func (i *IPRateLimiter) GetStats() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"total_entries":  len(i.ips),
-		"active_entries": activeCount,
+		"total_entries":   len(i.ips),
+		"active_entries":  activeCount,
 		"expired_entries": expiredCount,
-		"max_entries":    i.maxEntries,
-		"entry_ttl":      i.entryTTL.String(),
+		"max_entries":     i.maxEntries,
+		"entry_ttl":       i.entryTTL.String(),
 	}
 }
 
 var (
-	// Default rate limiter: 100 requests per second, burst of 200
-	defaultLimiter = NewIPRateLimiter(100, 200)
+	defaultLimiter          = NewIPRateLimiter(100, 200)
+	chatMessageLimiter      *IPRateLimiter
+	chatConversationLimiter *IPRateLimiter
+	chatGroupLimiter        *IPRateLimiter
+	chatLimitersInitialized bool
 )
 
+// InitChatRateLimiters initializes chat-specific rate limiters with the given limits
+func InitChatRateLimiters(messagesPerMinute, conversationsPerMinute, groupsPerMinute int) {
+	chatMessageLimiter = NewIPRateLimiter(messagesPerMinute/60, messagesPerMinute/60)
+	chatConversationLimiter = NewIPRateLimiter(conversationsPerMinute/60, conversationsPerMinute/60)
+	chatGroupLimiter = NewIPRateLimiter(groupsPerMinute/60, groupsPerMinute/60)
+	chatLimitersInitialized = true
+
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			if chatMessageLimiter != nil {
+				chatMessageLimiter.Cleanup()
+			}
+			if chatConversationLimiter != nil {
+				chatConversationLimiter.Cleanup()
+			}
+			if chatGroupLimiter != nil {
+				chatGroupLimiter.Cleanup()
+			}
+		}
+	}()
+}
+
+// ChatRateLimitMiddleware is a rate limiting middleware for chat endpoints
+func ChatRateLimitMiddleware(limitType string) gin.HandlerFunc {
+	var limiter *IPRateLimiter
+
+	if !chatLimitersInitialized {
+		limiter = defaultLimiter
+	} else {
+		switch limitType {
+		case "messages":
+			limiter = chatMessageLimiter
+		case "conversations":
+			limiter = chatConversationLimiter
+		case "groups":
+			limiter = chatGroupLimiter
+		default:
+			limiter = defaultLimiter
+		}
+	}
+
+	if limiter == nil || limiter.r == 0 {
+		limiter = defaultLimiter
+	}
+
+	return func(c *gin.Context) {
+		ip := c.ClientIP()
+		rateLimiter := limiter.GetLimiter(ip)
+
+		if !rateLimiter.Allow() {
+			retryAfter := time.Minute
+			c.Header("Retry-After", retryAfter.String())
+			c.Header("X-RateLimit-Limit", "30")
+			c.Header("X-RateLimit-Remaining", "0")
+
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":       "Chat rate limit exceeded. Please try again later.",
+				"retry_after": retryAfter.String(),
+			})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
 // RateLimitMiddleware creates a rate limiting middleware
-// rps: requests per second, burst: burst size
 func RateLimitMiddleware(rps int, burst int) gin.HandlerFunc {
 	var limiter *IPRateLimiter
 	if rps > 0 && burst > 0 {
@@ -148,7 +213,6 @@ func RateLimitMiddleware(rps int, burst int) gin.HandlerFunc {
 		limiter = defaultLimiter
 	}
 
-	// Cleanup old entries periodically
 	go func() {
 		ticker := time.NewTicker(limiter.cleanupTick)
 		defer ticker.Stop()
@@ -162,7 +226,7 @@ func RateLimitMiddleware(rps int, burst int) gin.HandlerFunc {
 		limiter := limiter.GetLimiter(ip)
 
 		if !limiter.Allow() {
-			retryAfter := time.Second // Suggest retry after 1 second
+			retryAfter := time.Second
 			c.Header("Retry-After", retryAfter.String())
 			c.Header("X-RateLimit-Limit", "200")
 			c.Header("X-RateLimit-Remaining", "0")
@@ -175,11 +239,9 @@ func RateLimitMiddleware(rps int, burst int) gin.HandlerFunc {
 			return
 		}
 
-		// Add rate limit headers to response
 		c.Header("X-RateLimit-Limit", "200")
-		c.Header("X-RateLimit-Remaining", "1") // Simplified, actual remaining is internal
+		c.Header("X-RateLimit-Remaining", "1")
 
 		c.Next()
 	}
 }
-

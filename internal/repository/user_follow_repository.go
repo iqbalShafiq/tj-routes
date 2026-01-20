@@ -14,6 +14,8 @@ type UserFollowRepository interface {
 	GetFollowing(userID uint, offset, limit int) ([]models.User, int64, error)
 	GetFollowCounts(userID uint) (followers int64, following int64, err error)
 	GetFollowedUserIDs(followerID uint) ([]uint, error)
+	GetFriends(userID uint, offset, limit int) ([]models.User, int64, error)
+	IsMutualFollow(userA, userB uint) (bool, error)
 }
 
 type userFollowRepository struct {
@@ -111,5 +113,39 @@ func (r *userFollowRepository) GetFollowedUserIDs(followerID uint) ([]uint, erro
 		Where("follower_id = ?", followerID).
 		Pluck("following_id", &userIDs).Error
 	return userIDs, err
+}
+
+func (r *userFollowRepository) GetFriends(userID uint, offset, limit int) ([]models.User, int64, error) {
+	var users []models.User
+	var total int64
+
+	// Count total friends (mutual follows)
+	err := r.db.Model(&models.UserFollow{}).
+		Joins("INNER JOIN user_follows uf2 ON user_follows.following_id = uf2.follower_id AND user_follows.follower_id = uf2.following_id").
+		Where("user_follows.follower_id = ?", userID).
+		Count(&total).Error
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Get friends with pagination
+	err = r.db.Model(&models.User{}).
+		Joins("INNER JOIN user_follows uf1 ON users.id = uf1.following_id").
+		Joins("INNER JOIN user_follows uf2 ON uf1.following_id = uf2.follower_id AND uf1.follower_id = uf2.following_id").
+		Where("uf1.follower_id = ?", userID).
+		Offset(offset).
+		Limit(limit).
+		Find(&users).Error
+
+	return users, total, err
+}
+
+func (r *userFollowRepository) IsMutualFollow(userA, userB uint) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.UserFollow{}).
+		Joins("INNER JOIN user_follows uf2 ON user_follows.following_id = uf2.follower_id AND user_follows.follower_id = uf2.following_id").
+		Where("user_follows.follower_id = ? AND user_follows.following_id = ?", userA, userB).
+		Count(&count).Error
+	return count > 0, err
 }
 

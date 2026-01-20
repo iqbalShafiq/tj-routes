@@ -7,6 +7,7 @@ import (
 
 	"tj-routes/internal/cache"
 	"tj-routes/internal/config"
+	"tj-routes/internal/dto"
 	"tj-routes/internal/models"
 	"tj-routes/internal/service"
 	"tj-routes/internal/utils"
@@ -184,4 +185,73 @@ func (h *AuthHandler) OAuthCallback(c *gin.Context) {
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
 	})
+}
+
+// ForgotPassword initiates the password reset process
+// Always returns success to prevent email enumeration attacks
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var req dto.ForgotPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	// Always return success message to prevent email enumeration
+	// The service handles the actual logic
+	if err := h.userService.ForgotPassword(req.Email); err != nil {
+		// Only return error for rate limiting
+		if err == utils.ErrRateLimitExceeded {
+			BadRequest(c, err)
+			return
+		}
+		// For other errors, still return success to prevent enumeration
+	}
+
+	MessageResponse(c, http.StatusOK, "If an account exists with this email, you will receive a password reset link shortly.")
+}
+
+// ResetPassword resets the user's password using a valid reset token
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req dto.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	if err := h.userService.ResetPassword(req.Token, req.NewPassword); err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	MessageResponse(c, http.StatusOK, "Password has been reset successfully. Please log in with your new password.")
+}
+
+// ChangePassword changes the authenticated user's password
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	var req dto.ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	// Get user ID from context (set by auth middleware)
+	userIDVal, exists := c.Get("user_id")
+	if !exists {
+		Unauthorized(c, errors.New("unauthorized"))
+		return
+	}
+
+	// Safe type assertion
+	userID, ok := userIDVal.(uint)
+	if !ok {
+		InternalServerError(c, errors.New("invalid user ID type"))
+		return
+	}
+
+	if err := h.userService.ChangePassword(userID, req.CurrentPassword, req.NewPassword); err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	MessageResponse(c, http.StatusOK, "Password changed successfully.")
 }

@@ -135,3 +135,29 @@ func (h *UserFollowHandler) GetFollowStatus(c *gin.Context) {
 	})
 }
 
+func (h *UserFollowHandler) GetFriends(c *gin.Context) {
+	userIDStr := c.Param("id")
+	userID, err := strconv.ParseUint(userIDStr, 10, 32)
+	if err != nil {
+		BadRequest(c, err)
+		return
+	}
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	offset := (page - 1) * limit
+
+	friends, total, err := h.userFollowService.GetFriends(uint(userID), offset, limit)
+	if err != nil {
+		InternalServerError(c, err)
+		return
+	}
+
+	SuccessResponse(c, http.StatusOK, gin.H{
+		"friends": friends,
+		"total":   total,
+		"page":    page,
+		"limit":   limit,
+	})
+}
+
